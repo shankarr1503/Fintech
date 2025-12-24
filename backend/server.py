@@ -294,7 +294,7 @@ async def generate_financial_insights(user_id: str) -> List[Dict]:
         if len(insights) < 2:
             insights.append({
                 "title": "Good Progress!",
-                "description": f"Your spending is under control. Keep tracking for better financial health.",
+                "description": "Your spending is under control. Keep tracking for better financial health.",
                 "category": "spending",
                 "impact_amount": None
             })
