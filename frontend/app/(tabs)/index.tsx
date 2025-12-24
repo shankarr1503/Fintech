@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { getDashboard, getInsights } from '../../src/services/api';
 import { formatCurrency, getCategoryColor, getCategoryIcon } from '../../src/utils/format';
