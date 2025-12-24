@@ -237,8 +237,11 @@ async def categorize_transaction_ai(merchant: str, description: str = "") -> Tra
         logger.error(f"AI categorization failed: {e}")
         return TransactionCategory.OTHER
 
-async def generate_financial_insights(user_id: str) -> List[Dict]:
-    """Generate financial insights based on spending patterns"""
+async def generate_financial_insights(user_id: str, use_ai: bool = True) -> List[Dict]:
+    """Generate financial insights based on spending patterns
+    
+    Uses AI-powered analysis when available, falls back to rule-based insights
+    """
     try:
         # Get user's transactions from last 2 months
         two_months_ago = datetime.utcnow() - timedelta(days=60)
@@ -253,14 +256,59 @@ async def generate_financial_insights(user_id: str) -> List[Dict]:
         # Prepare summary
         category_totals = {}
         total_spending = 0
+        total_income = 0
         for t in transactions:
             cat = t.get('category', 'other')
             if t.get('type') == 'debit':
                 amount = t.get('amount', 0)
                 category_totals[cat] = category_totals.get(cat, 0) + amount
                 total_spending += amount
+            elif t.get('type') == 'credit':
+                total_income += t.get('amount', 0)
         
-        # Generate rule-based insights (faster than AI)
+        # Try AI-powered insights first
+        if use_ai:
+            try:
+                spending_summary = ", ".join([f"{cat}: ₹{int(amt):,}" for cat, amt in sorted(category_totals.items(), key=lambda x: -x[1])[:6]])
+                
+                prompt = f"""Analyze this Indian user's monthly spending and provide 3 actionable financial insights.
+
+Monthly Income: ₹{int(total_income):,}
+Total Spending: ₹{int(total_spending):,}
+Category Breakdown: {spending_summary}
+
+Provide exactly 3 insights in this JSON format:
+[
+  {{"title": "short title", "description": "actionable advice in 1-2 sentences with specific INR amounts", "category": "saving|warning|spending", "impact_amount": number_or_null}}
+]
+
+Rules:
+- Use ₹ symbol for Indian Rupees
+- Be specific with numbers
+- Focus on actionable advice
+- category should be: "saving" for money-saving tips, "warning" for concerns, "spending" for general spending advice"""
+
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=500,
+                    temperature=0.7,
+                    timeout=10  # 10 second timeout
+                )
+                
+                content = response.choices[0].message.content.strip()
+                # Extract JSON from response
+                import re
+                json_match = re.search(r'\[.*\]', content, re.DOTALL)
+                if json_match:
+                    ai_insights = json.loads(json_match.group())
+                    if ai_insights and len(ai_insights) > 0:
+                        logger.info("AI insights generated successfully")
+                        return ai_insights[:3]
+            except Exception as ai_error:
+                logger.warning(f"AI insights failed, falling back to rules: {ai_error}")
+        
+        # Fallback to rule-based insights
         insights = []
         
         # Food spending insight
@@ -304,14 +352,33 @@ async def generate_financial_insights(user_id: str) -> List[Dict]:
                 "impact_amount": shopping_spending * 0.15
             })
         
+        # Transport insight
+        transport_spending = category_totals.get('transport', 0)
+        if transport_spending > 3000:
+            insights.append({
+                "title": "Optimize Transport",
+                "description": f"Transport costs of ₹{int(transport_spending):,}. Using public transport twice a week could save ₹{int(transport_spending * 0.2):,}/month.",
+                "category": "saving",
+                "impact_amount": transport_spending * 0.2
+            })
+        
         # If we have few insights, add a positive one
         if len(insights) < 2:
-            insights.append({
-                "title": "Good Progress!",
-                "description": "Your spending is under control. Keep tracking for better financial health.",
-                "category": "spending",
-                "impact_amount": None
-            })
+            savings_rate = ((total_income - total_spending) / total_income * 100) if total_income > 0 else 0
+            if savings_rate > 20:
+                insights.append({
+                    "title": "Excellent Savings!",
+                    "description": f"You're saving {int(savings_rate)}% of your income. Great financial discipline!",
+                    "category": "spending",
+                    "impact_amount": None
+                })
+            else:
+                insights.append({
+                    "title": "Track & Improve",
+                    "description": "Keep tracking your expenses to identify more savings opportunities.",
+                    "category": "spending",
+                    "impact_amount": None
+                })
         
         return insights[:3]  # Return max 3 insights
     except Exception as e:
