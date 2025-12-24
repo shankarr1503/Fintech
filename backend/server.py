@@ -224,7 +224,7 @@ async def categorize_transaction_ai(merchant: str, description: str = "") -> Tra
         return TransactionCategory.OTHER
 
 async def generate_financial_insights(user_id: str) -> List[Dict]:
-    """Generate AI-powered financial insights"""
+    """Generate financial insights based on spending patterns"""
     try:
         # Get user's transactions from last 2 months
         two_months_ago = datetime.utcnow() - timedelta(days=60)
@@ -236,27 +236,73 @@ async def generate_financial_insights(user_id: str) -> List[Dict]:
         if not transactions:
             return []
         
-        # Prepare summary for AI
+        # Prepare summary
         category_totals = {}
+        total_spending = 0
         for t in transactions:
             cat = t.get('category', 'other')
             if t.get('type') == 'debit':
-                category_totals[cat] = category_totals.get(cat, 0) + t.get('amount', 0)
+                amount = t.get('amount', 0)
+                category_totals[cat] = category_totals.get(cat, 0) + amount
+                total_spending += amount
         
-        prompt = f"""Analyze this spending data (INR) and provide 3 actionable insights:
+        # Generate rule-based insights (faster than AI)
+        insights = []
         
-        Monthly Spending by Category:
-        {json.dumps(category_totals, indent=2)}
+        # Food spending insight
+        food_spending = category_totals.get('food', 0)
+        if food_spending > 5000:
+            potential_savings = food_spending * 0.25
+            insights.append({
+                "title": "Reduce Food Delivery",
+                "description": f"You spent ₹{int(food_spending):,} on food. Cooking at home 3 times more per week could save ₹{int(potential_savings):,}/month.",
+                "category": "saving",
+                "impact_amount": potential_savings
+            })
         
-        Total transactions: {len(transactions)}
+        # Subscription insight
+        sub_spending = category_totals.get('subscription', 0)
+        if sub_spending > 500:
+            insights.append({
+                "title": "Review Subscriptions",
+                "description": f"You're paying ₹{int(sub_spending):,} for subscriptions. Consider using family plans to save up to 40%.",
+                "category": "warning",
+                "impact_amount": sub_spending * 0.4
+            })
         
-        Provide insights in this JSON format:
-        [{{
-            "title": "Short title",
-            "description": "Detailed insight with specific numbers",
-            "category": "spending/saving/warning",
-            "impact_amount": estimated monthly savings if applicable
-        }}]
+        # EMI insight
+        emi_spending = category_totals.get('emi', 0)
+        if emi_spending > 10000:
+            insights.append({
+                "title": "EMI Management",
+                "description": f"EMIs of ₹{int(emi_spending):,}/month take up a significant portion. Consider prepaying loans to reduce interest.",
+                "category": "spending",
+                "impact_amount": None
+            })
+        
+        # Shopping insight
+        shopping_spending = category_totals.get('shopping', 0)
+        if shopping_spending > 3000:
+            insights.append({
+                "title": "Smart Shopping",
+                "description": f"Shopping expenses of ₹{int(shopping_spending):,}. Try using cashback cards and wait for sales.",
+                "category": "saving",
+                "impact_amount": shopping_spending * 0.15
+            })
+        
+        # If we have few insights, add a positive one
+        if len(insights) < 2:
+            insights.append({
+                "title": "Good Progress!",
+                "description": f"Your spending is under control. Keep tracking for better financial health.",
+                "category": "spending",
+                "impact_amount": None
+            })
+        
+        return insights[:3]  # Return max 3 insights
+    except Exception as e:
+        logger.error(f"Insight generation failed: {e}")
+        return []
         
         Focus on:
         1. Unusual spending patterns
