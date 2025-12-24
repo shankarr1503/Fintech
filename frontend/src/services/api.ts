@@ -109,4 +109,56 @@ export const getSavingsSuggestions = async (userId: string) => {
   return response.data;
 };
 
+// User Profile APIs
+export const getUser = async (userId: string) => {
+  const response = await api.get(`/users/${userId}`);
+  return response.data;
+};
+
+export const updateUser = async (userId: string, data: { name?: string; monthly_income?: number; fixed_expenses?: number }) => {
+  const response = await api.put(`/users/${userId}`, data);
+  return response.data;
+};
+
+export const deleteUserAccount = async (userId: string, reason?: string) => {
+  const response = await api.delete(`/users/${userId}`, { data: { user_id: userId, reason } });
+  return response.data;
+};
+
+export const exportUserData = async (userId: string) => {
+  const response = await api.get(`/users/${userId}/export`);
+  return response.data;
+};
+
+// Security & Settings APIs
+export const getSecuritySettings = async (userId: string) => {
+  const response = await api.get(`/users/${userId}/security`);
+  return response.data;
+};
+
+export const updateSecuritySettings = async (userId: string, settings: {
+  biometric_enabled?: boolean;
+  transaction_alerts?: boolean;
+  login_notifications?: boolean;
+}) => {
+  const response = await api.post(`/users/${userId}/security`, { user_id: userId, ...settings });
+  return response.data;
+};
+
+export const updateLanguage = async (userId: string, language: string) => {
+  const response = await api.post(`/users/${userId}/language`, { user_id: userId, language });
+  return response.data;
+};
+
+export const getLinkedAccounts = async (userId: string) => {
+  const response = await api.get(`/users/${userId}/linked-accounts`);
+  return response.data;
+};
+
+// Support API
+export const submitSupportRequest = async (userId: string, subject: string, message: string) => {
+  const response = await api.post('/support', { user_id: userId, subject, message });
+  return response.data;
+};
+
 export default api;
