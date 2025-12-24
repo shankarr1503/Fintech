@@ -224,32 +224,35 @@ export default function HomeScreen() {
         </View>
         <View style={styles.chartCard}>
           {pieData.length > 0 ? (
-            <View style={styles.chartContainer}>
-              <PieChart
-                data={pieData}
-                donut
-                radius={80}
-                innerRadius={55}
-                centerLabelComponent={() => (
-                  <View style={styles.chartCenter}>
-                    <Text style={styles.chartCenterLabel}>Total</Text>
-                    <Text style={styles.chartCenterValue}>
-                      {formatCurrency(dashboard?.spending?.this_month || 0)}
-                    </Text>
-                  </View>
-                )}
-              />
-              <View style={styles.legendContainer}>
-                {pieData.map((item, index) => (
-                  <View key={index} style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                    <Text style={styles.legendText}>{item.text}</Text>
-                    <Text style={styles.legendValue}>
-                      {formatCurrency(item.value)}
-                    </Text>
-                  </View>
-                ))}
+            <View>
+              <View style={styles.chartSummary}>
+                <Text style={styles.chartSummaryLabel}>This Month Total</Text>
+                <Text style={styles.chartSummaryValue}>
+                  {formatCurrency(dashboard?.spending?.this_month || 0)}
+                </Text>
               </View>
+              {pieData.map((item, index) => {
+                const percentage = ((item.value / (dashboard?.spending?.this_month || 1)) * 100).toFixed(1);
+                return (
+                  <View key={index} style={styles.categoryRow}>
+                    <View style={styles.categoryInfo}>
+                      <View style={[styles.categoryDot, { backgroundColor: item.color }]} />
+                      <Text style={styles.categoryName}>{item.text}</Text>
+                    </View>
+                    <View style={styles.categoryBarContainer}>
+                      <View style={styles.categoryBarBg}>
+                        <View 
+                          style={[
+                            styles.categoryBarFill, 
+                            { width: `${percentage}%`, backgroundColor: item.color }
+                          ]} 
+                        />
+                      </View>
+                    </View>
+                    <Text style={styles.categoryAmount}>{formatCurrency(item.value)}</Text>
+                  </View>
+                );
+              })}
             </View>
           ) : (
             <Text style={styles.noDataText}>No spending data available</Text>
