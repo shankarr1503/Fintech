@@ -827,7 +827,7 @@ async def analyze_debts(user_id: str, extra_payment: float = 0):
 async def get_savings_goals(user_id: str):
     """Get all savings goals"""
     goals = await db.savings_goals.find({"user_id": user_id}).to_list(100)
-    return goals
+    return serialize_doc(goals)
 
 @api_router.post("/savings")
 async def create_savings_goal(goal: SavingsGoalCreate):
