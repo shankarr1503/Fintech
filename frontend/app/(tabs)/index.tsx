@@ -560,48 +560,63 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 24,
   },
-  chartContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  chartSummary: {
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A3142',
+    paddingBottom: 16,
   },
-  chartCenter: {
-    alignItems: 'center',
-  },
-  chartCenterLabel: {
+  chartSummaryLabel: {
     fontSize: 12,
     color: '#6B7280',
+    marginBottom: 4,
   },
-  chartCenterValue: {
-    fontSize: 14,
-    fontWeight: '600',
+  chartSummaryValue: {
+    fontSize: 24,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
-  legendContainer: {
-    flex: 1,
-    marginLeft: 20,
-  },
-  legendItem: {
+  categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  categoryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 90,
+  },
+  categoryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     marginRight: 8,
   },
-  legendText: {
-    flex: 1,
+  categoryName: {
     fontSize: 12,
     color: '#9CA3AF',
     textTransform: 'capitalize',
   },
-  legendValue: {
+  categoryBarContainer: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  categoryBarBg: {
+    height: 8,
+    backgroundColor: '#2A3142',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  categoryBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  categoryAmount: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#FFFFFF',
+    width: 70,
+    textAlign: 'right',
   },
   noDataText: {
     textAlign: 'center',
