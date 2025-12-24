@@ -109,6 +109,11 @@ class User(BaseModel):
     otp: Optional[str] = None
     otp_expiry: Optional[datetime] = None
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    monthly_income: Optional[float] = None
+    fixed_expenses: Optional[float] = None
+
 class UserCreate(BaseModel):
     phone: str
     name: Optional[str] = None
@@ -195,6 +200,15 @@ class Insight(BaseModel):
     category: str
     impact_amount: Optional[float] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class DeleteAccountRequest(BaseModel):
+    user_id: str
+    reason: Optional[str] = None
+
+class SupportRequest(BaseModel):
+    user_id: str
+    subject: str
+    message: str
 
 # ============== AI CATEGORIZATION ==============
 async def categorize_transaction_ai(merchant: str, description: str = "") -> TransactionCategory:
@@ -304,56 +318,95 @@ async def generate_financial_insights(user_id: str) -> List[Dict]:
         logger.error(f"Insight generation failed: {e}")
         return []
 
-# ============== DEBT CALCULATIONS ==============
+# ============== DEBT CALCULATIONS - FIXED ==============
 def calculate_debt_payoff(debts: List[Dict], strategy: DebtStrategy, extra_payment: float = 0) -> Dict:
-    """Calculate debt payoff timeline using snowball or avalanche strategy"""
-    if not debts:
-        return {"total_months": 0, "total_interest": 0, "payoff_order": []}
+    """Calculate debt payoff timeline using snowball or avalanche strategy
     
-    # Sort debts based on strategy
-    if strategy == DebtStrategy.SNOWBALL:
-        sorted_debts = sorted(debts, key=lambda x: x['outstanding'])
-    else:  # Avalanche
-        sorted_debts = sorted(debts, key=lambda x: x['interest_rate'], reverse=True)
+    SNOWBALL: Pay minimum on all, throw extra at SMALLEST balance first
+    AVALANCHE: Pay minimum on all, throw extra at HIGHEST interest rate first
+    """
+    if not debts:
+        return {"total_months": 0, "total_interest": 0, "payoff_order": [], "monthly_breakdown": []}
+    
+    # Create working copies with balance tracking
+    working_debts = []
+    for d in debts:
+        working_debts.append({
+            'name': d['name'],
+            'balance': float(d['outstanding']),
+            'interest_rate': float(d['interest_rate']),
+            'emi_amount': float(d['emi_amount']),
+            'original_balance': float(d['outstanding'])
+        })
     
     total_months = 0
     total_interest = 0
     payoff_order = []
+    monthly_breakdown = []
     
-    remaining_debts = [{**d, 'balance': d['outstanding']} for d in sorted_debts]
-    
-    while any(d['balance'] > 0 for d in remaining_debts):
+    # Continue until all debts are paid
+    while any(d['balance'] > 0.01 for d in working_debts):
         total_months += 1
         if total_months > 360:  # 30 years max
             break
-            
-        available_extra = extra_payment
         
-        for debt in remaining_debts:
-            if debt['balance'] <= 0:
-                continue
-                
-            # Calculate monthly interest
-            monthly_interest = (debt['balance'] * debt['interest_rate']) / (12 * 100)
-            total_interest += monthly_interest
+        month_data = {"month": total_months, "payments": [], "remaining_total": 0}
+        
+        # Step 1: Apply interest to all debts
+        for debt in working_debts:
+            if debt['balance'] > 0:
+                monthly_interest = (debt['balance'] * debt['interest_rate']) / (12 * 100)
+                debt['balance'] += monthly_interest
+                total_interest += monthly_interest
+        
+        # Step 2: Pay minimum EMI on all debts
+        for debt in working_debts:
+            if debt['balance'] > 0:
+                payment = min(debt['emi_amount'], debt['balance'])
+                debt['balance'] -= payment
+                month_data['payments'].append({"name": debt['name'], "payment": payment, "type": "emi"})
+        
+        # Step 3: Sort remaining debts based on strategy for extra payment
+        active_debts = [d for d in working_debts if d['balance'] > 0.01]
+        
+        if active_debts and extra_payment > 0:
+            if strategy == DebtStrategy.SNOWBALL:
+                # Sort by balance (smallest first)
+                active_debts.sort(key=lambda x: x['balance'])
+            else:  # AVALANCHE
+                # Sort by interest rate (highest first)
+                active_debts.sort(key=lambda x: x['interest_rate'], reverse=True)
             
-            # Apply EMI
-            payment = debt['emi_amount'] + (available_extra if debt == remaining_debts[0] else 0)
-            debt['balance'] = debt['balance'] + monthly_interest - payment
-            
-            if debt['balance'] <= 0:
-                available_extra = abs(debt['balance'])
-                debt['balance'] = 0
+            # Apply extra payment to the priority debt
+            remaining_extra = extra_payment
+            for debt in active_debts:
+                if remaining_extra <= 0 or debt['balance'] <= 0:
+                    break
+                extra_to_apply = min(remaining_extra, debt['balance'])
+                debt['balance'] -= extra_to_apply
+                remaining_extra -= extra_to_apply
+                month_data['payments'].append({"name": debt['name'], "payment": extra_to_apply, "type": "extra"})
+        
+        # Step 4: Check for any debts that just got paid off
+        for debt in working_debts:
+            if debt['balance'] <= 0.01 and debt['balance'] != -999:  # -999 is marker for already recorded
                 payoff_order.append({
                     "name": debt['name'],
-                    "months_to_payoff": total_months
+                    "months_to_payoff": total_months,
+                    "interest_rate": debt['interest_rate']
                 })
+                debt['balance'] = -999  # Mark as paid off and recorded
+        
+        month_data['remaining_total'] = sum(max(0, d['balance']) for d in working_debts if d['balance'] != -999)
+        monthly_breakdown.append(month_data)
     
     return {
         "total_months": total_months,
         "total_interest": round(total_interest, 2),
         "payoff_order": payoff_order,
-        "debt_free_date": (datetime.utcnow() + timedelta(days=total_months * 30)).strftime("%B %Y")
+        "debt_free_date": (datetime.utcnow() + timedelta(days=total_months * 30)).strftime("%B %Y"),
+        "strategy": strategy.value,
+        "strategy_description": "Smallest balance first" if strategy == DebtStrategy.SNOWBALL else "Highest interest first"
     }
 
 # ============== SAMPLE DATA GENERATOR ==============
@@ -431,7 +484,7 @@ async def generate_sample_data(user_id: str):
     if transactions:
         await db.transactions.insert_many(transactions)
     
-    # Add sample debts
+    # Add sample debts with DIFFERENT interest rates to show strategy difference
     sample_debts = [
         {
             "id": str(uuid.uuid4()),
@@ -439,8 +492,8 @@ async def generate_sample_data(user_id: str):
             "name": "HDFC Credit Card",
             "type": "credit_card",
             "principal": 50000,
-            "outstanding": 42000,
-            "interest_rate": 36,
+            "outstanding": 42000,  # Smallest balance
+            "interest_rate": 36,    # Highest interest
             "emi_amount": 5000,
             "remaining_tenure": 10,
             "created_at": datetime.utcnow()
@@ -451,8 +504,8 @@ async def generate_sample_data(user_id: str):
             "name": "Personal Loan",
             "type": "personal_loan",
             "principal": 200000,
-            "outstanding": 156000,
-            "interest_rate": 14,
+            "outstanding": 156000,  # Medium balance
+            "interest_rate": 14,     # Medium interest
             "emi_amount": 8500,
             "remaining_tenure": 20,
             "created_at": datetime.utcnow()
@@ -463,8 +516,8 @@ async def generate_sample_data(user_id: str):
             "name": "iPhone EMI",
             "type": "emi",
             "principal": 80000,
-            "outstanding": 48000,
-            "interest_rate": 0,
+            "outstanding": 48000,   # Medium balance
+            "interest_rate": 0,      # Lowest interest (0%)
             "emi_amount": 8000,
             "remaining_tenure": 6,
             "created_at": datetime.utcnow()
@@ -558,22 +611,81 @@ async def verify_otp(request: OTPVerify):
         }
     }
 
+@api_router.get("/users/{user_id}")
+async def get_user(user_id: str):
+    """Get user profile"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return serialize_doc(user)
+
 @api_router.put("/users/{user_id}")
-async def update_user(user_id: str, name: str = None, monthly_income: float = None, fixed_expenses: float = None):
+async def update_user(user_id: str, user_data: UserUpdate):
     """Update user profile"""
-    update_data = {}
-    if name is not None:
-        update_data['name'] = name
-    if monthly_income is not None:
-        update_data['monthly_income'] = monthly_income
-    if fixed_expenses is not None:
-        update_data['fixed_expenses'] = fixed_expenses
+    update_data = {k: v for k, v in user_data.dict().items() if v is not None}
     
     if update_data:
         await db.users.update_one({"id": user_id}, {"$set": update_data})
     
     user = await db.users.find_one({"id": user_id})
-    return user
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "message": "Profile updated successfully",
+        "user": serialize_doc(user)
+    }
+
+@api_router.delete("/users/{user_id}")
+async def delete_user_account(user_id: str, request: DeleteAccountRequest):
+    """Delete user account and all associated data"""
+    # Delete all user data
+    await db.transactions.delete_many({"user_id": user_id})
+    await db.debts.delete_many({"user_id": user_id})
+    await db.savings_goals.delete_many({"user_id": user_id})
+    await db.insights.delete_many({"user_id": user_id})
+    await db.users.delete_one({"id": user_id})
+    
+    logger.info(f"User {user_id} account deleted. Reason: {request.reason}")
+    
+    return {"message": "Account deleted successfully"}
+
+@api_router.post("/support")
+async def submit_support_request(request: SupportRequest):
+    """Submit a support request"""
+    support_ticket = {
+        "id": str(uuid.uuid4()),
+        "user_id": request.user_id,
+        "subject": request.subject,
+        "message": request.message,
+        "status": "open",
+        "created_at": datetime.utcnow()
+    }
+    await db.support_tickets.insert_one(support_ticket)
+    
+    return {"message": "Support request submitted", "ticket_id": support_ticket['id']}
+
+@api_router.get("/users/{user_id}/export")
+async def export_user_data(user_id: str):
+    """Export all user data"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    transactions = await db.transactions.find({"user_id": user_id}).to_list(10000)
+    debts = await db.debts.find({"user_id": user_id}).to_list(100)
+    savings = await db.savings_goals.find({"user_id": user_id}).to_list(100)
+    
+    return {
+        "export_date": datetime.utcnow().isoformat(),
+        "user": serialize_doc(user),
+        "transactions": serialize_doc(transactions),
+        "debts": serialize_doc(debts),
+        "savings_goals": serialize_doc(savings),
+        "total_transactions": len(transactions),
+        "total_debts": len(debts),
+        "total_savings_goals": len(savings)
+    }
 
 # ============== TRANSACTION ROUTES ==============
 @api_router.get("/transactions/{user_id}")
@@ -832,6 +944,10 @@ async def analyze_debts(user_id: str, extra_payment: float = 0):
     snowball = calculate_debt_payoff(debts, DebtStrategy.SNOWBALL, extra_payment)
     avalanche = calculate_debt_payoff(debts, DebtStrategy.AVALANCHE, extra_payment)
     
+    # Log for debugging
+    logger.info(f"Debt Analysis - Snowball: {snowball['total_months']} months, {snowball['total_interest']} interest")
+    logger.info(f"Debt Analysis - Avalanche: {avalanche['total_months']} months, {avalanche['total_interest']} interest")
+    
     return {
         "total_debt": round(total_debt, 2),
         "total_emi": round(total_emi, 2),
@@ -942,19 +1058,22 @@ async def get_dashboard(user_id: str):
         action = {
             "type": "debt",
             "title": "Pay Extra on Debt",
-            "description": f"You have ₹{int(analytics['remaining_balance'] - total_emi):,} extra. Consider paying ₹2,000 more on your highest interest debt."
+            "description": f"You have ₹{int(analytics['remaining_balance'] - total_emi):,} extra. Consider paying ₹2,000 more on your highest interest debt.",
+            "action_id": "debt_payoff"
         }
     elif analytics['remaining_balance'] > 5000:
         action = {
             "type": "savings",
             "title": "Boost Savings",
-            "description": f"Great month! Move ₹{int(analytics['remaining_balance'] * 0.2):,} to your savings goal."
+            "description": f"Great month! Move ₹{int(analytics['remaining_balance'] * 0.2):,} to your savings goal.",
+            "action_id": "savings_boost"
         }
     else:
         action = {
             "type": "expense",
             "title": "Review Expenses",
-            "description": "Check your food delivery expenses - they might be higher than usual."
+            "description": "Check your food delivery expenses - they might be higher than usual.",
+            "action_id": "expense_review"
         }
     
     return {
