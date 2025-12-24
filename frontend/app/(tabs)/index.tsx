@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { getDashboard, getInsights } from '../../src/services/api';
 import { formatCurrency, getCategoryColor, getCategoryIcon } from '../../src/utils/format';
-import { PieChart } from 'react-native-gifted-charts';
 
 const { width } = Dimensions.get('window');
 
