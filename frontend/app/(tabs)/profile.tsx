@@ -34,36 +34,50 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleMenuPress = (item: typeof menuItems[0]) => {
+    if (item.route) {
+      router.push(item.route as any);
+    } else if (item.action) {
+      item.action();
+    }
+  };
+
   const menuItems = [
     {
       icon: 'person-outline',
       title: 'Personal Information',
       subtitle: 'Update your profile details',
+      route: '/edit-profile',
     },
     {
       icon: 'card-outline',
       title: 'Linked Accounts',
       subtitle: 'Manage connected bank accounts',
+      action: () => Alert.alert('Linked Accounts', 'Account Aggregator integration coming soon. This will allow you to securely link your bank accounts for automatic transaction tracking.'),
     },
     {
       icon: 'notifications-outline',
       title: 'Notifications',
       subtitle: 'Manage alerts and reminders',
+      action: () => router.push('/security'),
     },
     {
       icon: 'lock-closed-outline',
       title: 'Privacy & Security',
       subtitle: 'Data protection settings',
+      route: '/security',
     },
     {
       icon: 'help-circle-outline',
       title: 'Help & Support',
       subtitle: 'FAQs and contact support',
+      route: '/help',
     },
     {
       icon: 'document-text-outline',
       title: 'Terms & Privacy Policy',
       subtitle: 'Legal information',
+      action: () => Alert.alert('Legal', 'Terms of Service and Privacy Policy are available at financewise.app/legal'),
     },
   ];
 
