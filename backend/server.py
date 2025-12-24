@@ -745,6 +745,67 @@ async def submit_support_request(request: SupportRequest):
     
     return {"message": "Support request submitted", "ticket_id": support_ticket['id']}
 
+class LanguageUpdate(BaseModel):
+    user_id: str
+    language: str  # en, hi, ta, te, etc.
+
+class SecuritySettings(BaseModel):
+    user_id: str
+    biometric_enabled: bool = False
+    transaction_alerts: bool = True
+    login_notifications: bool = True
+
+@api_router.post("/users/{user_id}/language")
+async def update_language(user_id: str, data: LanguageUpdate):
+    """Update user's preferred language"""
+    await db.users.update_one({"id": user_id}, {"$set": {"language": data.language}})
+    return {"message": "Language updated successfully", "language": data.language}
+
+@api_router.get("/users/{user_id}/security")
+async def get_security_settings(user_id: str):
+    """Get user's security settings"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "biometric_enabled": user.get('biometric_enabled', False),
+        "transaction_alerts": user.get('transaction_alerts', True),
+        "login_notifications": user.get('login_notifications', True)
+    }
+
+@api_router.post("/users/{user_id}/security")
+async def update_security_settings(user_id: str, settings: SecuritySettings):
+    """Update user's security settings"""
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "biometric_enabled": settings.biometric_enabled,
+            "transaction_alerts": settings.transaction_alerts,
+            "login_notifications": settings.login_notifications
+        }}
+    )
+    return {"message": "Security settings updated"}
+
+@api_router.get("/users/{user_id}/linked-accounts")
+async def get_linked_accounts(user_id: str):
+    """Get user's linked bank accounts (mock)"""
+    # In production, this would fetch from Account Aggregator
+    accounts = await db.linked_accounts.find({"user_id": user_id}).to_list(10)
+    if not accounts:
+        # Return demo accounts
+        return [
+            {
+                "id": "acc_001",
+                "bank_name": "HDFC Bank",
+                "account_type": "Savings",
+                "last_four": "4521",
+                "linked_date": datetime.utcnow().isoformat(),
+                "status": "active"
+            }
+        ]
+    return serialize_doc(accounts)
+
 @api_router.get("/users/{user_id}/export")
 async def export_user_data(user_id: str):
     """Export all user data"""
