@@ -90,7 +90,7 @@ export default function TransactionsScreen() {
 
   const sections = Object.entries(groupedTransactions).map(([date, items]) => ({
     date,
-    data: items,
+    data: items as any[],
   }));
 
   const renderTransaction = ({ item }: { item: any }) => (
