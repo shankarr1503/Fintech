@@ -776,7 +776,7 @@ async def get_expense_reduction_tips(user_id: str):
 async def get_debts(user_id: str):
     """Get all user debts"""
     debts = await db.debts.find({"user_id": user_id}).to_list(100)
-    return debts
+    return serialize_doc(debts)
 
 @api_router.post("/debts")
 async def create_debt(debt: DebtCreate):
