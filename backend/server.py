@@ -620,10 +620,10 @@ async def upload_csv(user_id: str, file: UploadFile = File(...)):
             # Parse date
             try:
                 date = datetime.strptime(date_str, '%Y-%m-%d')
-            except:
+            except (ValueError, TypeError):
                 try:
                     date = datetime.strptime(date_str, '%d/%m/%Y')
-                except:
+                except (ValueError, TypeError):
                     date = datetime.utcnow()
             
             category = await categorize_transaction_ai(merchant)
