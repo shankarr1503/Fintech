@@ -48,6 +48,7 @@ interface DashboardData {
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [insights, setInsights] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
