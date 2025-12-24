@@ -564,18 +564,31 @@ async def generate_sample_data(user_id: str):
     if transactions:
         await db.transactions.insert_many(transactions)
     
-    # Add sample debts with DIFFERENT interest rates to show strategy difference
+    # Add sample debts - DESIGNED to show strategy differences
+    # Key: Smallest balance should NOT have highest interest for strategies to differ
     sample_debts = [
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "name": "Store Credit Card",
+            "type": "credit_card",
+            "principal": 20000,
+            "outstanding": 15000,   # SMALLEST balance
+            "interest_rate": 12,    # LOW interest
+            "emi_amount": 2000,
+            "remaining_tenure": 8,
+            "created_at": datetime.utcnow()
+        },
         {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "name": "HDFC Credit Card",
             "type": "credit_card",
-            "principal": 50000,
-            "outstanding": 42000,  # Smallest balance
-            "interest_rate": 36,    # Highest interest
+            "principal": 80000,
+            "outstanding": 65000,   # MEDIUM balance
+            "interest_rate": 36,    # HIGHEST interest
             "emi_amount": 5000,
-            "remaining_tenure": 10,
+            "remaining_tenure": 15,
             "created_at": datetime.utcnow()
         },
         {
@@ -584,8 +597,8 @@ async def generate_sample_data(user_id: str):
             "name": "Personal Loan",
             "type": "personal_loan",
             "principal": 200000,
-            "outstanding": 156000,  # Medium balance
-            "interest_rate": 14,     # Medium interest
+            "outstanding": 156000,  # LARGEST balance
+            "interest_rate": 14,    # MEDIUM interest
             "emi_amount": 8500,
             "remaining_tenure": 20,
             "created_at": datetime.utcnow()
@@ -596,8 +609,8 @@ async def generate_sample_data(user_id: str):
             "name": "iPhone EMI",
             "type": "emi",
             "principal": 80000,
-            "outstanding": 48000,   # Medium balance
-            "interest_rate": 0,      # Lowest interest (0%)
+            "outstanding": 48000,   # MEDIUM balance
+            "interest_rate": 0,     # NO interest (0%)
             "emi_amount": 8000,
             "remaining_tenure": 6,
             "created_at": datetime.utcnow()
