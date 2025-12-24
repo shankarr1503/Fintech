@@ -303,33 +303,6 @@ async def generate_financial_insights(user_id: str) -> List[Dict]:
     except Exception as e:
         logger.error(f"Insight generation failed: {e}")
         return []
-        
-        Focus on:
-        1. Unusual spending patterns
-        2. Potential savings opportunities
-        3. Positive financial habits
-        
-        Respond with ONLY the JSON array."""
-        
-        response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=500,
-            temperature=0.7
-        )
-        
-        insights_text = response.choices[0].message.content.strip()
-        # Clean up response
-        if insights_text.startswith("```"):
-            insights_text = insights_text.split("```")[1]
-            if insights_text.startswith("json"):
-                insights_text = insights_text[4:]
-        
-        insights = json.loads(insights_text)
-        return insights
-    except Exception as e:
-        logger.error(f"Insight generation failed: {e}")
-        return []
 
 # ============== DEBT CALCULATIONS ==============
 def calculate_debt_payoff(debts: List[Dict], strategy: DebtStrategy, extra_payment: float = 0) -> Dict:
