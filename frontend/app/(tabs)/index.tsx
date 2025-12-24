@@ -194,7 +194,19 @@ export default function HomeScreen() {
 
         {/* Recommended Action */}
         {dashboard?.recommended_action && (
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => {
+              // Navigate based on action type
+              if (dashboard.recommended_action.type === 'debt') {
+                router.push('/(tabs)/debts');
+              } else if (dashboard.recommended_action.type === 'savings') {
+                router.push('/(tabs)/savings');
+              } else {
+                router.push('/expenses');
+              }
+            }}
+          >
             <View style={styles.actionIconContainer}>
               <Ionicons
                 name={
