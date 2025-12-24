@@ -131,7 +131,11 @@ export default function ProfileScreen() {
         {/* Menu Items */}
         <View style={styles.menuSection}>
           {menuItems.map((item, index) => (
-            <TouchableOpacity key={index} style={styles.menuItem}>
+            <TouchableOpacity 
+              key={index} 
+              style={styles.menuItem}
+              onPress={() => handleMenuPress(item)}
+            >
               <View style={styles.menuIconContainer}>
                 <Ionicons name={item.icon as any} size={22} color="#FFFFFF" />
               </View>
