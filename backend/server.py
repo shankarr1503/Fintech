@@ -565,7 +565,7 @@ async def get_transactions(user_id: str, limit: int = 100, category: str = None)
         query["category"] = category
     
     transactions = await db.transactions.find(query).sort("date", -1).to_list(limit)
-    return transactions
+    return serialize_doc(transactions)
 
 @api_router.post("/transactions")
 async def create_transaction(transaction: TransactionCreate):
