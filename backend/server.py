@@ -914,7 +914,8 @@ async def get_dashboard(user_id: str):
     total_target = sum(g['target_amount'] for g in goals)
     
     # Get recent transactions
-    recent_txns = await db.transactions.find({"user_id": user_id}).sort("date", -1).to_list(5)
+    recent_txns_raw = await db.transactions.find({"user_id": user_id}).sort("date", -1).to_list(5)
+    recent_txns = serialize_doc(recent_txns_raw)
     
     # Generate one recommended action
     action = None
