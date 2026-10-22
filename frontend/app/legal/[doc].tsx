@@ -10,8 +10,7 @@ import { C, F, themed } from '../../src/ui/theme';
 
 /** Fonts, icons and images bundled in the app, and their licences. */
 const ASSETS: [string, string, string][] = [
-  ['Alegreya Sans SC (font)', 'SIL Open Font License 1.1', 'Copyright 2013 The Alegreya Sans Project Authors'],
-  ['Playfair Display SC (font)', 'SIL Open Font License 1.1', 'Copyright 2017 The Playfair Display Project Authors; Reserved Font Name "Playfair Display"'],
+  ['Pixelify Sans (font)', 'SIL Open Font License 1.1', 'Copyright 2021 The Pixelify Sans Project Authors. Modified: ₹ sign and arrows added'],
   ['Feather icons', 'MIT', 'Copyright (c) 2013-2017 Cole Bemis'],
   ['react-native-vector-icons', 'MIT', 'Copyright (c) 2015 Joel Arvidsson'],
   ['App icon, coin and illustrations', 'Proprietary', 'Drawn for CoinQuest; no third-party images are used'],

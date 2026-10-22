@@ -1,15 +1,5 @@
 [
   {
-    "name": "@expo-google-fonts/alegreya-sans-sc",
-    "version": "0.4.2",
-    "license": "MIT AND OFL-1.1"
-  },
-  {
-    "name": "@expo-google-fonts/playfair-display-sc",
-    "version": "0.4.1",
-    "license": "MIT AND OFL-1.1"
-  },
-  {
     "name": "@expo/vector-icons",
     "version": "15.0.3",
     "license": "MIT"
@@ -26,22 +16,22 @@
   },
   {
     "name": "@react-navigation/bottom-tabs",
-    "version": "7.4.2",
+    "version": "7.20.0",
     "license": "MIT"
   },
   {
     "name": "@react-navigation/elements",
-    "version": "2.5.2",
+    "version": "2.9.44",
     "license": "MIT"
   },
   {
     "name": "@react-navigation/native",
-    "version": "7.1.26",
+    "version": "7.5.0",
     "license": "MIT"
   },
   {
     "name": "@react-navigation/native-stack",
-    "version": "7.3.21",
+    "version": "7.20.0",
     "license": "MIT"
   },
   {
@@ -52,6 +42,11 @@
   {
     "name": "expo",
     "version": "54.0.37",
+    "license": "MIT"
+  },
+  {
+    "name": "expo-blur",
+    "version": "15.0.8",
     "license": "MIT"
   },
   {
@@ -102,6 +97,11 @@
   {
     "name": "expo-router",
     "version": "6.0.24",
+    "license": "MIT"
+  },
+  {
+    "name": "expo-secure-store",
+    "version": "15.0.8",
     "license": "MIT"
   },
   {

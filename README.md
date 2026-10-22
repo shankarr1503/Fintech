@@ -9,7 +9,7 @@
 
 Good money habits earn coins, XP, streaks and badges.
 
-The look is strictly black and white, set entirely in small caps (Playfair Display SC and Alegreya Sans SC). The design benchmarks Google Pay, PhonePe, Paytm, CRED and 1% Club. [docs/design/DESIGN.md](docs/design/DESIGN.md) covers what we took from each app, the design principles and the tokens. [docs/COMPLIANCE.md](docs/COMPLIANCE.md) covers security, compliance and reliability: what's done, what needs infrastructure, and what needs legal or business work.
+The look is dark glassmorphism: frosted glass surfaces over a soft aurora, with Pixelify Sans throughout (a ₹ sign was drawn for it) and a single mint accent. A frosted light mode is one tap away. The design benchmarks Google Pay, PhonePe, Paytm, CRED, 1% Club and the Safyre wallet concept. [docs/design/DESIGN.md](docs/design/DESIGN.md) covers what we took from each app, the design principles and the tokens. [docs/COMPLIANCE.md](docs/COMPLIANCE.md) covers security, compliance and reliability: what's done, what needs infrastructure, and what needs legal or business work.
 
 | Sign in | Home | Pay | Paid |
 |---|---|---|---|
@@ -23,9 +23,9 @@ The look is strictly black and white, set entirely in small caps (Playfair Displ
 |---|---|---|---|
 | ![](docs/screenshots/app-lock.png) | ![](docs/screenshots/pin-confirm.png) | ![](docs/screenshots/pending.png) | ![](docs/screenshots/failed.png) |
 
-| Alerts | Security | KYC | Dark mode |
+| Alerts | Security | KYC | Light mode |
 |---|---|---|---|
-| ![](docs/screenshots/alerts.png) | ![](docs/screenshots/security.png) | ![](docs/screenshots/kyc.png) | ![](docs/screenshots/home-dark.png) |
+| ![](docs/screenshots/alerts.png) | ![](docs/screenshots/security.png) | ![](docs/screenshots/kyc.png) | ![](docs/screenshots/home-light.png) |
 
 | 18+ and Terms consent | Privacy Policy | Loan key facts | Delete my data |
 |---|---|---|---|
@@ -46,7 +46,7 @@ The look is strictly black and white, set entirely in small caps (Playfair Displ
   - Identity (KYC), which raises payment limits.
   - Security: change PIN, biometric unlock, signed-in devices, data export, account deletion and a security history.
   - Notification preferences.
-  - Appearance: light, dark or match your phone.
+  - Appearance: dark glass (the default), frosted light, or match your phone.
 - **Also:**
   - Credit score with its factors and card bills.
   - Loans against MF, shares or FD; the full key facts (APR, fees with GST, total repayable) are shown before you apply.
@@ -79,7 +79,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 cp .env.example .env          # sets DEMO_MODE=true; optionally set MONGO_URL, OPENAI_API_KEY
 uvicorn server:app --reload --port 8001
-pytest                        # 69 tests: API, security, payments, privacy
+pytest                        # 99 tests: API, security, payments, privacy, review fixes
 ```
 
 **App** (Expo SDK 54):
