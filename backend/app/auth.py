@@ -9,6 +9,7 @@ and timed out: 15 minutes without activity, 30 days at most.
 `require_user` also rejects any request whose `user_id` (path, query or JSON
 body) isn't the caller's, and stores the caller on `request.state`.
 """
+import asyncio
 import hashlib
 import hmac
 import json
@@ -19,6 +20,7 @@ from typing import Optional
 
 import jwt
 from fastapi import HTTPException, Request
+from pymongo import ReturnDocument
 
 from .config import settings
 from .db import db
@@ -95,20 +97,37 @@ def hash_pin(pin: str, salt: Optional[bytes] = None) -> dict:
     return {"salt": salt.hex(), "hash": digest.hex(), "rounds": PBKDF2_ROUNDS}
 
 
+async def hash_pin_async(pin: str) -> dict:
+    """hash_pin off the event loop: 210k PBKDF2 rounds would stall every other request."""
+    return await asyncio.to_thread(hash_pin, pin)
+
+
 async def check_pin(user: dict, pin: str) -> None:
     """Raise unless `pin` matches. Locks the PIN for 15 minutes after 5 wrong tries."""
     record = user.get("pin")
     if not record:
         raise HTTPException(status_code=409, detail="Set up your app PIN first")
-    locked = user.get("pin_locked_until")
-    if locked and locked > _now():
-        minutes = max(1, int((locked - _now()).total_seconds() // 60) + 1)
+    # Reserve an attempt atomically before checking, so parallel guesses can't all read the same
+    # count: at most PIN_ATTEMPTS guesses are ever compared before the lock.
+    now = _now()
+    reserved = await db.users.find_one_and_update(
+        {"id": user["id"], "pin_attempts": {"$not": {"$gte": PIN_ATTEMPTS}},
+         "$or": [{"pin_locked_until": {"$exists": False}}, {"pin_locked_until": {"$lte": now}}]},
+        {"$inc": {"pin_attempts": 1}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not reserved:
+        current = await db.users.find_one({"id": user["id"]}) or {}
+        locked = current.get("pin_locked_until")
+        minutes = max(1, int((locked - now).total_seconds() // 60) + 1) if locked and locked > now else 15
         raise HTTPException(status_code=423, detail=f"PIN locked. Try again in {minutes} minutes.")
-    candidate = hashlib.pbkdf2_hmac("sha256", pin.encode(), bytes.fromhex(record["salt"]), record.get("rounds", PBKDF2_ROUNDS)).hex()
+    candidate = (await asyncio.to_thread(
+        hashlib.pbkdf2_hmac, "sha256", pin.encode(), bytes.fromhex(record["salt"]), record.get("rounds", PBKDF2_ROUNDS)
+    )).hex()
     if hmac.compare_digest(candidate, record["hash"]):
         await db.users.update_one({"id": user["id"]}, {"$set": {"pin_attempts": 0}, "$unset": {"pin_locked_until": ""}})
         return
-    attempts = user.get("pin_attempts", 0) + 1
+    attempts = reserved["pin_attempts"]
     if attempts >= PIN_ATTEMPTS:
         await db.users.update_one({"id": user["id"]}, {"$set": {"pin_attempts": 0, "pin_locked_until": _now() + PIN_LOCK}})
         from .services import audit, notify
@@ -116,7 +135,6 @@ async def check_pin(user: dict, pin: str) -> None:
         await audit.record("pin_locked", user["id"], {})
         await notify.send(user["id"], "security", "PIN locked", "Too many wrong PIN attempts. It unlocks in 15 minutes. If this wasn't you, change your PIN.")
         raise HTTPException(status_code=423, detail="Too many wrong attempts. PIN locked for 15 minutes.")
-    await db.users.update_one({"id": user["id"]}, {"$set": {"pin_attempts": attempts}})
     left = PIN_ATTEMPTS - attempts
     # 403, not 401: the session is still valid, only this PIN was wrong (clients sign out on 401).
     raise HTTPException(status_code=403, detail=f"Wrong PIN. {left} attempt{'s' if left != 1 else ''} left.")

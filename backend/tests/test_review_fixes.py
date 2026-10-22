@@ -151,3 +151,29 @@ def test_checkin_pays_once_even_when_requests_race(client):
     run(db.game_profiles.update_one({"user_id": uid}, {"$set": {"last_checkin": None}}, upsert=True))
     run(game.claim_once(f"checkin:{uid}:{game.today_key()}"))  # as if a parallel request won the race
     assert client.post("/api/game/checkin", json={"user_id": uid}, headers=h).json()["already_checked_in"] is True
+
+
+def test_spoofed_forwarded_for_does_not_reset_ip_limits(client, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "otp_sends_per_ip_hour", 3)
+    run(db.rate_limits.delete_many({"key": {"$regex": "^otp-send:ip:"}}))
+    codes = [client.post("/api/auth/send-otp", json={"phone": f"98000000{i:02d}"}, headers={"X-Forwarded-For": f"10.0.0.{i}"}).status_code for i in range(5)]
+    assert codes == [200, 200, 200, 429, 429]
+    run(db.rate_limits.delete_many({"key": {"$regex": "^otp-send:ip:"}}))
+
+
+def test_pin_attempts_reserved_by_parallel_guesses_lock_the_pin(client):
+    uid, token, _ = signed_in(client)
+    # As if five guesses were in flight at once: each reserved an attempt before comparing.
+    run(db.users.update_one({"id": uid}, {"$set": {"pin_attempts": 5}}))
+    res = client.post("/api/auth/pin/verify", json={"pin": "4826"}, headers=auth(token))
+    assert res.status_code == 423
+
+
+def test_otp_attempts_are_reserved_before_comparing(client):
+    phone = "9811111111"
+    code = client.post("/api/auth/send-otp", json={"phone": phone}).json()["demo_otp"]
+    run(db.otp_codes.update_one({"phone": phone}, {"$set": {"attempts": 5}}))
+    res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10", "confirm_age": True})
+    assert res.status_code == 400 and "Too many" in res.json()["detail"]
