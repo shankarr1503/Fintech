@@ -77,12 +77,14 @@ export default function Security() {
     );
 
   const toggle = async (key: keyof Settings, value: boolean) => {
+    let prevBio: string | null = null;
     if (key === 'biometric_enabled') {
       if (value) {
         // Prove it's the owner's finger before trusting it to unlock the app.
         const res = await LocalAuthentication.authenticateAsync({ promptMessage: 'Turn on biometric unlock', disableDeviceFallback: true }).catch(() => null);
         if (!res?.success) return;
       }
+      prevBio = await AsyncStorage.getItem(BIOMETRIC_KEY).catch(() => null);
       await AsyncStorage.setItem(BIOMETRIC_KEY, value ? 'on' : 'off').catch(() => {});
     }
     const prev = data.settings;
@@ -90,6 +92,8 @@ export default function Security() {
     try {
       await updateSecuritySettings(userId, { ...prev, [key]: value });
     } catch (e) {
+      // Not saved: the app lock must keep following the setting as shown.
+      if (key === 'biometric_enabled') await AsyncStorage.setItem(BIOMETRIC_KEY, prevBio ?? 'off').catch(() => {});
       setData({ ...data, settings: prev });
       Alert.alert("Couldn't save", errorMessage(e));
     }
