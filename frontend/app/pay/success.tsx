@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getReceipt, Receipt } from '../../src/services/receipt';
-import { getPaymentStatus } from '../../src/services/api';
+import { getPaymentStatus, paymentByKey } from '../../src/services/api';
 import { Coin } from '../../src/game/Coin';
 import { Amount, Button, Divider, Label, NATIVE, Small, useStatusBar } from '../../src/ui/kit';
 import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
@@ -54,18 +54,28 @@ export default function PaymentSuccess() {
   const first = useRef(r).current;
   const [stillPending, setStillPending] = useState(false);
   useEffect(() => {
-    if (!first || first.status !== 'pending' || !first.txnId) return;
+    if (!first || first.status !== 'pending' || (!first.txnId && !first.key)) return;
+    const key = first.key;
+    let txnId = first.txnId;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let delay = POLL_FIRST_MS;
     const started = Date.now();
     const tick = async () => {
       try {
-        const latest = await getPaymentStatus(first.txnId);
+        // No transaction id yet (the server was still processing): find it by the idempotency key.
+        const latest = txnId ? await getPaymentStatus(txnId) : await paymentByKey(key!);
         if (cancelled) return;
-        if (latest.status !== 'pending') {
+        if (!txnId && latest.transaction_id) {
+          txnId = latest.transaction_id as string;
+          setR((cur) => cur && { ...cur, txnId: latest.transaction_id, ref: latest.rail_ref || latest.transaction_id });
+        }
+        if (latest.status !== 'pending' && latest.status !== 'processing') {
           cancelled = true;
-          setR((cur) => cur && { ...cur, status: latest.status, reason: latest.reason, coins: latest.coins_earned ?? cur.coins, ref: latest.rail_ref || cur.ref });
+          setR(
+            (cur) =>
+              cur && { ...cur, status: latest.status, reason: latest.reason, coins: latest.coins_earned ?? cur.coins, reward: latest.reward ?? cur.reward, ref: latest.rail_ref || cur.ref },
+          );
           return;
         }
       } catch {

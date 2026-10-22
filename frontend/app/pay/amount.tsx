@@ -89,6 +89,7 @@ export default function AmountScreen() {
         status: res.status,
         reason: res.reason,
         txnId: res.transaction_id,
+        key: idemKey.current,
         amount: res.amount,
         name: params.name || params.to,
         upi: params.to,
@@ -117,6 +118,7 @@ export default function AmountScreen() {
           // Timed out or connection dropped: ask the server whether it got the payment before saying anything.
           try {
             const known = await paymentByKey(idemKey.current);
+            // Received but not finished yet: the receipt looks the transaction up by idempotency key.
             if (known.status === 'processing') finish({ status: 'pending', amount: value, transaction_id: '', reason: 'Waiting for the bank to confirm' });
             else finish(known);
           } catch {

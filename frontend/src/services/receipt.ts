@@ -5,6 +5,8 @@ export type Receipt = {
   status: 'success' | 'pending' | 'failed' | 'on_hold';
   reason?: string | null;
   txnId: string;
+  /** Idempotency key of the attempt: resolves the transaction when the server hadn't assigned one yet. */
+  key?: string;
   amount: number;
   name: string;
   upi: string;
