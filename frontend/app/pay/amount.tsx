@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { errorMessage, getUPILinkedAccounts, isStepUpExpired, paymentByKey, requestMoneyUPI, sendMoneyUPI, verifyPin } from '../../src/services/api';
 import { useOnline } from '../../src/ui/OfflineBanner';
 import { PinPad } from '../../src/ui/PinPad';
-import { setReceipt } from '../../src/services/receipt';
+import { MAX_PAYMENT, MIN_PAYMENT, setReceipt } from '../../src/services/receipt';
 import { useUserData } from '../../src/game/useData';
 import { useGame } from '../../src/game/GameContext';
 import { Alert } from '../../src/ui/dialog';
@@ -14,7 +14,6 @@ import { Avatar, Button, haptic, IconButton, NATIVE, NO_OUTLINE, Row, Sheet, Sma
 import { SwipeToPay } from '../../src/ui/SwipeToPay';
 import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
 
-const MAX = 100000;
 // Must match STEP_UP_AMOUNT on the server: at or above this, the PIN is asked for.
 const STEP_UP_AMOUNT = 2000;
 
@@ -35,14 +34,16 @@ async function lookupPayment(key: string) {
   return null;
 }
 
-type Account ={ id: string; bank: string; account_number: string; is_primary: boolean; balance: number };
+type Account = { id: string; bank: string; account_number: string; is_primary: boolean; balance: number };
 
 export default function AmountScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ to: string; name?: string; am?: string; tn?: string; mode?: string }>();
   const request = params.mode === 'request';
-  const fixedAmount = !!params.am; // merchant QR with a set amount
-  const [amount, setAmount] = useState(params.am ?? '');
+  // Merchant QR with a set amount. Only lock it if it can actually be paid; otherwise they type one.
+  const am = params.am && /^\d+(\.\d{1,2})?$/.test(params.am) && Number(params.am) >= MIN_PAYMENT && Number(params.am) <= MAX_PAYMENT ? params.am : '';
+  const fixedAmount = !!am;
+  const [amount, setAmount] = useState(am);
   const [note, setNote] = useState(params.tn ?? '');
   const [editingNote, setEditingNote] = useState(false);
   const [source, setSource] = useState<string | null>(null);
@@ -61,11 +62,16 @@ export default function AmountScreen() {
   const account = accounts.find((a) => a.id === source) ?? accounts.find((a) => a.is_primary) ?? accounts[0];
   const value = Number(amount || 0);
   const name = params.name || params.to?.split('@')[0] || '';
-  const valid = value >= 1 && value <= MAX;
+  const valid = value >= MIN_PAYMENT && value <= MAX_PAYMENT;
 
   useEffect(() => {
     if (!params.to) router.replace('/pay');
   }, [params.to, router]);
+
+  const badAmount = !!params.am && !am;
+  useEffect(() => {
+    if (badAmount) Alert.alert("Can't use this amount", `The amount in this code can't be paid. Enter an amount from ₹${MIN_PAYMENT} to ₹${MAX_PAYMENT.toLocaleString('en-IN')}.`);
+  }, [badAmount]);
 
   const nudge = () => {
     haptic('medium');
@@ -83,7 +89,7 @@ export default function AmountScreen() {
       const [whole, frac] = (a + k).split('.');
       if (frac !== undefined && frac.length > 2) return a;
       const next = (whole.replace(/^0+(?=\d)/, '') || '0') + (frac !== undefined ? `.${frac}` : '');
-      if (Number(next) > MAX) {
+      if (Number(next) > MAX_PAYMENT) {
         nudge();
         return a;
       }

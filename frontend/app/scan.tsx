@@ -25,6 +25,10 @@ export default function ScanScreen() {
       setError("That isn't a UPI payment code.");
       return;
     }
+    if ('error' in upi) {
+      setError(upi.error);
+      return;
+    }
     handled.current = true;
     haptic('success');
     router.replace({ pathname: '/pay/amount', params: { to: upi.to, name: upi.name ?? '', am: upi.amount ?? '', tn: upi.note ?? '' } });
