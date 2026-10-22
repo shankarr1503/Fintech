@@ -189,10 +189,13 @@ async def require_user(request: Request) -> str:
     user_id = session["user_id"]
 
     claimed = [request.path_params.get("user_id"), request.query_params.get("user_id")]
-    if request.method in ("POST", "PUT", "PATCH", "DELETE") and "json" in request.headers.get("content-type", ""):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        # Inspect any body that parses as JSON, whatever the Content-Type says: FastAPI reads
+        # `application/JSON` or `+json` bodies too, so a header-based check can be sidestepped.
+        raw = await request.body()  # Starlette caches the body for the route
         try:
-            body = json.loads(await request.body() or b"{}")  # Starlette caches the body for the route
-        except ValueError:
+            body = json.loads(raw) if raw else None
+        except (ValueError, UnicodeDecodeError):
             body = None
         if isinstance(body, dict):
             claimed.append(body.get("user_id"))
