@@ -52,13 +52,28 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// The server's 401s that are about the session itself (auth.py session_from_token).
+const SESSION_GONE = ['Session ended', 'Signed out after'];
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401 && authToken) onUnauthorized?.();
+    if (error?.response?.status === 401 && authToken) {
+      const detail = String(error.response.data?.detail ?? '');
+      // A 401 on a request carrying a step-up token usually means only that 5-minute token expired
+      // (the server words it like an expired session). Keep the session and ask for the PIN again;
+      // if the session really expired, the PIN check itself gets a 401 and signs out.
+      const headers = error.config?.headers;
+      const sentStepUp = !!(headers?.get?.('X-Step-Up-Token') ?? headers?.['X-Step-Up-Token']);
+      if (sentStepUp && !SESSION_GONE.some((s) => detail.startsWith(s))) error.stepUpExpired = true;
+      else onUnauthorized?.();
+    }
     return Promise.reject(error);
   },
 );
+
+/** The payment's PIN confirmation expired: ask for the PIN again rather than signing out. */
+export const isStepUpExpired = (error: any) => !!error?.stepUpExpired;
 
 // Auth APIs
 export const sendOTP = async (phone: string) => {

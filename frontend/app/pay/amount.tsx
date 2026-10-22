@@ -3,7 +3,7 @@ import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { errorMessage, getUPILinkedAccounts, paymentByKey, requestMoneyUPI, sendMoneyUPI, verifyPin } from '../../src/services/api';
+import { errorMessage, getUPILinkedAccounts, isStepUpExpired, paymentByKey, requestMoneyUPI, sendMoneyUPI, verifyPin } from '../../src/services/api';
 import { useOnline } from '../../src/ui/OfflineBanner';
 import { PinPad } from '../../src/ui/PinPad';
 import { setReceipt } from '../../src/services/receipt';
@@ -139,6 +139,10 @@ export default function AmountScreen() {
           else if (known.status === 'processing') finish({ status: 'pending', amount: value, transaction_id: '', reason: 'Waiting for the bank to confirm' });
           else finish(known);
         } else if (status === 428) {
+          setAskPin(true);
+        } else if (isStepUpExpired(e)) {
+          // Only the 5-minute PIN confirmation lapsed; nothing was sent.
+          setPinError('Your PIN confirmation expired. Confirm your PIN again.');
           setAskPin(true);
         } else if (status === 409 && detail.includes('still being processed')) {
           // An earlier try with this key reached the server and is still running: wait for it, don't pay again.
