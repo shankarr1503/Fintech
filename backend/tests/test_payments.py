@@ -245,3 +245,30 @@ def test_failed_webhook_is_not_remembered_and_receipts_dedupe(client):
     again = {**fixed, "event_id": uuid.uuid4().hex}
     assert webhook(client, again).json()["duplicate"] is True  # same rail_ref, new event id
     assert run(db.upi_transactions.count_documents({"rail_ref": "r-nan", "type": "upi_receive"})) == 1
+
+
+def test_payments_run_one_at_a_time_per_user(client, monkeypatch):
+    uid, h = new_user(client)
+    monkeypatch.setattr(payments, "LOCK_WAIT_SECONDS", 0.3)
+    run(db.payment_locks.insert_one({"user_id": uid, "token": "other", "expires_at": datetime.utcnow() + timedelta(seconds=30)}))
+    busy = pay(client, uid, h, 130)
+    assert busy.status_code == 409 and "still being processed" in busy.json()["detail"]
+    # A lock left behind by a crashed worker is taken over once it expires.
+    run(db.payment_locks.update_one({"user_id": uid}, {"$set": {"expires_at": datetime.utcnow() - timedelta(seconds=1)}}))
+    assert pay(client, uid, h, 130).status_code == 200
+    assert run(db.payment_locks.find_one({"user_id": uid})) is None
+
+
+def test_unexpected_error_does_not_strand_the_idempotency_key(client, monkeypatch):
+    uid, h = new_user(client)
+
+    async def boom(txn):
+        raise RuntimeError("worker died mid-call")
+
+    monkeypatch.setattr(payments.rail, "pay", boom)
+    key = uuid.uuid4().hex
+    with pytest.raises(RuntimeError):
+        pay(client, uid, h, 140, key=key)
+    monkeypatch.undo()
+    retry = pay(client, uid, h, 140, key=key)
+    assert retry.status_code == 200 and retry.json()["status"] == "pending" and retry.json()["replayed"] is True

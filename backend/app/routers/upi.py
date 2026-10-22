@@ -102,9 +102,14 @@ async def send_money_upi(body: SendMoney, request: Request, response: Response, 
         response.headers["Idempotent-Replayed"] = "true"
         return replay
     try:
-        result = await _send(uid, amount, recipient, note, body, request)
+        async with payments.user_lock(uid):
+            result = await _send(uid, amount, recipient, note, body, request, idempotency_key)
     except HTTPException:
         await payments.idempotency_abort(uid, idempotency_key)
+        raise
+    except Exception:
+        # Not a refusal: something broke mid-payment. Don't leave the key "processing" for 24h.
+        await payments.idempotency_crashed(uid, idempotency_key)
         raise
     await payments.idempotency_finish(uid, idempotency_key, result)
     if result["status"] in ("pending", "on_hold"):
@@ -112,7 +117,7 @@ async def send_money_upi(body: SendMoney, request: Request, response: Response, 
     return result
 
 
-async def _send(uid: str, amount: float, recipient: str, note: str, body: "SendMoney", request: Request) -> dict:
+async def _send(uid: str, amount: float, recipient: str, note: str, body: "SendMoney", request: Request, idempotency_key: Optional[str]) -> dict:
     user = await db.users.find_one({"id": uid})
     if recipient == f"user{uid[:4]}@coinquest":
         raise HTTPException(status_code=400, detail="You can't pay yourself. Use self transfer between your accounts.")
@@ -148,6 +153,7 @@ async def _send(uid: str, amount: float, recipient: str, note: str, body: "SendM
     if check["outcome"] == "hold":
         txn.update(status="on_hold", reason="Held for a routine security check. We'll update you within 24 hours; no money has moved.")
         await db.upi_transactions.insert_one(dict(txn))
+        await payments.idempotency_attach(uid, idempotency_key, txn_id)
         await audit.record("payment_on_hold", uid, {"txn_id": txn_id, "amount": amount, "rules": [h["rule"] for h in check["hits"]]}, request)
         await notify.send(uid, "security", "Payment held for review", f"₹{amount:,.0f} to {recipient} is on hold for a routine check. No money has moved.", {"txn_id": txn_id})
         return {**payments.public(txn), "reward": {}}
@@ -155,6 +161,7 @@ async def _send(uid: str, amount: float, recipient: str, note: str, body: "SendM
     if payments.breaker.open:
         raise HTTPException(status_code=503, detail=payments.UNAVAILABLE)
     await db.upi_transactions.insert_one(dict(txn))
+    await payments.idempotency_attach(uid, idempotency_key, txn_id)
     await audit.record("payment_initiated", uid, {"txn_id": txn_id, "amount": amount, "aml": check["outcome"]}, request)
 
     try:
