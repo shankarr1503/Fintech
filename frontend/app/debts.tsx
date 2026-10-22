@@ -6,7 +6,7 @@ import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
 import { Amount, Body, Button, Card, Chip, Display, Divider, Empty, ErrorState, Field, IconButton, Label, Pill, Progress, Screen, Section, Segmented, Sheet, SkeletonScreen, Small, Strong } from '../src/ui/kit';
 import { C, R, themed } from '../src/ui/theme';
-import { formatCompact } from '../src/utils/format';
+import { formatCompact, parseAmount } from '../src/utils/format';
 
 type Debt = { id: string; name: string; type: string; principal: number; outstanding: number; interest_rate: number; emi_amount: number; remaining_tenure: number };
 
@@ -54,18 +54,21 @@ export default function Debts() {
   const progress = borrowed ? 1 - analysis.total_debt / borrowed : 0;
 
   const add = async () => {
-    const outstanding = parseFloat(form.outstanding);
-    const emi = parseFloat(form.emi_amount);
+    const outstanding = parseAmount(form.outstanding);
+    const emi = parseAmount(form.emi_amount);
+    const principal = form.principal.trim() ? parseAmount(form.principal) : outstanding;
+    const rate = form.interest_rate.trim() ? parseAmount(form.interest_rate.replace('%', '')) : 0;
     if (!form.name.trim() || !(outstanding > 0) || !(emi > 0)) return Alert.alert('A few details missing', 'Name, amount owed and monthly payment are needed.');
+    if (!(principal > 0) || !(rate >= 0 && rate <= 100)) return Alert.alert('Check the numbers', 'Enter amounts like 1,00,000 and the interest rate as a percentage, like 36.');
     setBusy(true);
     try {
       const res = await createDebt({
         user_id: userId,
         name: form.name.trim(),
         type: form.type,
-        principal: parseFloat(form.principal) || outstanding,
+        principal,
         outstanding,
-        interest_rate: parseFloat(form.interest_rate) || 0,
+        interest_rate: rate,
         emi_amount: emi,
         remaining_tenure: parseInt(form.remaining_tenure, 10) || 12,
       });
@@ -82,8 +85,8 @@ export default function Debts() {
 
   const pay = async () => {
     if (!target) return;
-    const a = parseFloat(amount);
-    if (!(a > 0)) return;
+    const a = parseAmount(amount);
+    if (!(a > 0)) return Alert.alert('Check the amount', 'Enter it as a number, like 1,000.');
     setBusy(true);
     try {
       const res = await payDebt(target.id, a);

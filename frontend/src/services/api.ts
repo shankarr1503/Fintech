@@ -21,6 +21,7 @@ let onUnauthorized: (() => void) | null = null;
 export const setAuthToken = (token: string | null) => {
   authToken = token;
 };
+export const getAuthToken = () => authToken;
 
 /** Called when the server rejects the session (expired/invalid token). */
 export const setUnauthorizedHandler = (handler: (() => void) | null) => {
@@ -46,19 +47,37 @@ async function getDeviceId() {
 }
 
 api.interceptors.request.use(async (config) => {
-  if (authToken) config.headers.Authorization = `Bearer ${authToken}`;
+  // A request may name its own token (logout of a session already cleared on this device).
+  if (authToken && !config.headers.Authorization) config.headers.Authorization = `Bearer ${authToken}`;
   config.headers['X-Device-Id'] = await getDeviceId();
   config.headers['X-Device-Name'] = DEVICE_NAME;
   return config;
 });
 
+// The server's 401s that are about the session itself (auth.py session_from_token).
+const SESSION_GONE = ['Session ended', 'Signed out after'];
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401 && authToken) onUnauthorized?.();
+    const headers = error?.config?.headers;
+    const header = (name: string) => headers?.get?.(name) ?? headers?.[name];
+    // Only a rejection of the current session signs out, not one for an older token.
+    if (error?.response?.status === 401 && authToken && header('Authorization') === `Bearer ${authToken}`) {
+      const detail = String(error.response.data?.detail ?? '');
+      // A 401 on a request carrying a step-up token usually means only that 5-minute token expired
+      // (the server words it like an expired session). Keep the session and ask for the PIN again;
+      // if the session really expired, the PIN check itself gets a 401 and signs out.
+      const sentStepUp = !!header('X-Step-Up-Token');
+      if (sentStepUp && !SESSION_GONE.some((s) => detail.startsWith(s))) error.stepUpExpired = true;
+      else onUnauthorized?.();
+    }
     return Promise.reject(error);
   },
 );
+
+/** The payment's PIN confirmation expired: ask for the PIN again rather than signing out. */
+export const isStepUpExpired = (error: any) => !!error?.stepUpExpired;
 
 // Auth APIs
 export const sendOTP = async (phone: string) => {
@@ -66,9 +85,9 @@ export const sendOTP = async (phone: string) => {
   return response.data;
 };
 
-/** Revoke the current session token on the server. */
-export const logoutSession = async () => {
-  await api.post('/auth/logout');
+/** Revoke a session token on the server (by default the current one). */
+export const logoutSession = async (token: string | null = authToken) => {
+  await api.post('/auth/logout', null, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
 };
 
 /** Version of the Terms & Privacy Policy shown on the sign-in screen. */
