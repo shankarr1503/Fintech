@@ -77,7 +77,7 @@ The game engine is server-side (`backend/app/services/game.py`). Every money end
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-cp .env.example .env          # optional: set MONGO_URL, OPENAI_API_KEY
+cp .env.example .env          # sets DEMO_MODE=true; optionally set MONGO_URL, OPENAI_API_KEY
 uvicorn server:app --reload --port 8001
 pytest                        # 69 tests: API, security, payments, privacy
 ```
@@ -114,8 +114,8 @@ Backend settings go in `backend/.env` (see `.env.example`):
 | Variable | Default | Purpose |
 |---|---|---|
 | `MONGO_URL`, `DB_NAME` | in-memory | Database. Leave `MONGO_URL` empty for the in-memory fallback |
-| `DEMO_MODE` | `true` | Shows the OTP on screen and seeds demo data. **Must be `false` in production** |
-| `SECRET_KEY` | random per run | Signs session tokens. Without it, sessions end when the server restarts |
+| `DEMO_MODE` | `false` | `true` shows the OTP on screen and seeds demo data (the `.env.example` turns it on for local runs). **Must be `false` in production** |
+| `SECRET_KEY` | random per run in demo mode | Signs session tokens. With `DEMO_MODE=false` the server won't start without it (32+ characters), `FIELD_ENCRYPTION_KEY`, `MONGO_URL` and `WEBHOOK_SECRET` |
 | `FIELD_ENCRYPTION_KEY` | random per run (demo only) | AES-256 key (base64, 32 bytes) for PAN and DOB. The API won't start without it outside demo mode |
 | `WEBHOOK_SECRET` | | Shared with the payment partner to sign webhooks |
 | `ADMIN_API_KEY` | admin API off | Enables `/api/admin/*`: audit verification, AML alerts, reconciliation |

@@ -37,6 +37,7 @@ PBKDF2_ROUNDS = 210_000
 _secret = settings.secret_key
 if not _secret:
     _secret = secrets.token_urlsafe(48)
+    # Only reachable in demo mode: config refuses to start a real deployment without SECRET_KEY.
     logger.warning("SECRET_KEY not set - using a random key; sessions end when the server restarts")
 
 

@@ -35,18 +35,42 @@ class Settings:
     # Shared secret the payment provider uses to sign webhooks.
     webhook_secret: str = os.environ.get("WEBHOOK_SECRET", "")
     # Reject plain-HTTP API calls (TLS terminates at the proxy, which sets X-Forwarded-Proto).
-    require_https: bool = _bool("REQUIRE_HTTPS", not _bool("DEMO_MODE", True))
+    require_https: bool = _bool("REQUIRE_HTTPS", not _bool("DEMO_MODE", False))
     # Sign out after this many minutes without any API activity.
     idle_timeout_minutes: int = int(os.environ.get("IDLE_TIMEOUT_MINUTES", "15"))
     # Send push notifications through Expo (needs outbound internet).
     push_enabled: bool = _bool("PUSH_ENABLED", False)
     # Public base URL of this API, used to build links in emails (e.g. unsubscribe).
     public_api_url: str = os.environ.get("PUBLIC_API_URL", "http://localhost:8001").rstrip("/")
-    # Demo mode echoes the OTP back to the client instead of sending an SMS.
-    demo_mode: bool = _bool("DEMO_MODE", True)
+    # Demo mode echoes the OTP back to the client instead of sending an SMS. Off unless asked for,
+    # so a deployment that forgets the variable fails closed instead of handing out OTPs.
+    demo_mode: bool = _bool("DEMO_MODE", False)
     cors_origins: list[str] = [
         o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()
     ]
 
 
+def production_problems(s: "Settings") -> list[str]:
+    """Settings a real (non-demo) deployment can't run safely without."""
+    if s.demo_mode:
+        return []
+    problems = []
+    if len(s.secret_key) < 32:
+        problems.append("SECRET_KEY must be set to a random value of at least 32 characters")
+    if not s.field_encryption_key:
+        problems.append("FIELD_ENCRYPTION_KEY must be set")
+    if not s.mongo_url:
+        problems.append("MONGO_URL must be set (the in-memory database is for demos and tests only)")
+    if not s.webhook_secret:
+        problems.append("WEBHOOK_SECRET must be set")
+    return problems
+
+
 settings = Settings()
+
+_problems = production_problems(settings)
+if _problems:
+    raise RuntimeError(
+        "Refusing to start with DEMO_MODE off: " + "; ".join(_problems)
+        + ". For a local demo, set DEMO_MODE=true (see backend/.env.example)."
+    )

@@ -46,3 +46,25 @@ def test_privacy_update_only_accepts_known_switches(client):
     ok = client.post("/api/security/update-privacy", json={"settings": {"data_sharing": {"marketing": True}}}, headers=auth(token))
     assert ok.status_code == 200
     assert run(db.privacy_settings.find_one({"user_id": uid}))["data_sharing"]["marketing"] is True
+
+
+def test_production_config_fails_closed():
+    from app.config import Settings, production_problems
+
+    s = Settings()
+    s.demo_mode, s.secret_key, s.field_encryption_key, s.mongo_url, s.webhook_secret = False, "", "", "", ""
+    assert len(production_problems(s)) == 4
+    s.secret_key, s.field_encryption_key, s.mongo_url, s.webhook_secret = "x" * 48, "k", "mongodb://db", "w"
+    assert production_problems(s) == []
+    s.demo_mode, s.secret_key = True, ""
+    assert production_problems(s) == []
+
+
+def test_demo_mode_and_https_default_to_production_values(monkeypatch):
+    from app import config
+
+    monkeypatch.delenv("DEMO_MODE", raising=False)
+    monkeypatch.delenv("REQUIRE_HTTPS", raising=False)
+    assert config._bool("DEMO_MODE", False) is False
+    src = open(config.__file__).read()
+    assert '_bool("DEMO_MODE", True)' not in src
