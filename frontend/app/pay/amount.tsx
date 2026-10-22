@@ -95,7 +95,7 @@ export default function AmountScreen() {
   const idemKey = useRef(newKey());
   useEffect(() => {
     idemKey.current = newKey();
-  }, [value, note, params.to, source]);
+  }, [value, note, params.to, account?.id]);
 
   const finish = useCallback(
     (res: any) => {
@@ -121,10 +121,11 @@ export default function AmountScreen() {
   );
 
   const pay = useCallback(
-    async (opts: { stepUpToken?: string; confirmDuplicate?: boolean } = {}) => {
+    async (opts: { stepUpToken?: string; confirmDuplicate?: boolean; rekeyed?: boolean } = {}) => {
       setBusy(true);
       try {
-        finish(await sendMoneyUPI(userId, params.to, value, note, account?.id ?? '', { idempotencyKey: idemKey.current, ...opts }));
+        const { rekeyed, ...send } = opts;
+        finish(await sendMoneyUPI(userId, params.to, value, note, account?.id ?? '', { idempotencyKey: idemKey.current, ...send }));
       } catch (e: any) {
         const status = e?.response?.status;
         const detail = errorMessage(e);
@@ -139,6 +140,14 @@ export default function AmountScreen() {
           else finish(known);
         } else if (status === 428) {
           setAskPin(true);
+        } else if (status === 409 && detail.includes('still being processed')) {
+          // An earlier try with this key reached the server and is still running: wait for it, don't pay again.
+          finish({ status: 'pending', amount: value, transaction_id: '', reason: 'Waiting for the bank to confirm' });
+        } else if (status === 409 && detail.includes('already used for a different payment')) {
+          // The key belongs to an attempt with other details, and nothing was sent for this one: retry once with a new key.
+          idemKey.current = newKey();
+          if (!opts.rekeyed) await pay({ ...opts, rekeyed: true });
+          else Alert.alert('Payment not sent', 'Something went wrong on our side. No money has left your account. Please try again.');
         } else if (status === 409 && detail.includes('a moment ago')) {
           Alert.alert('Pay again?', detail, [
             { text: 'Cancel', style: 'cancel' },
