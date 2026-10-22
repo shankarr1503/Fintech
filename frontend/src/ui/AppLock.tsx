@@ -35,13 +35,15 @@ export function AppLock() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored]);
 
+  // Same rule as cold start: lock unless the user is known to have no PIN yet.
+  const canLock = !!user && user.pin_set !== false;
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'background' || state === 'inactive') backgroundAt.current = Date.now();
-      else if (state === 'active' && backgroundAt.current && Date.now() - backgroundAt.current > LOCK_AFTER_MS && user?.pin_set) setLocked(true);
+      else if (state === 'active' && backgroundAt.current && Date.now() - backgroundAt.current > LOCK_AFTER_MS && canLock) setLocked(true);
     });
     return () => sub.remove();
-  }, [user?.pin_set]);
+  }, [canLock]);
 
   useEffect(() => {
     if (!user) setLocked(false);
