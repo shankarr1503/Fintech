@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 from pymongo.errors import DuplicateKeyError
 
 from ..db import db
+from ..utils import to_ist
 
 # action -> (xp, coins)
 ACTIONS: Dict[str, tuple] = {
@@ -97,7 +98,8 @@ def world_for_level(level: int) -> str:
 
 
 def today_key(now: Optional[datetime] = None) -> str:
-    return (now or datetime.utcnow()).strftime("%Y-%m-%d")
+    """The user's calendar day (IST) for a naive-UTC instant: streaks and quests reset at IST midnight."""
+    return to_ist(now or datetime.utcnow()).strftime("%Y-%m-%d")
 
 
 def quests_for_day(day: str) -> List[Dict]:

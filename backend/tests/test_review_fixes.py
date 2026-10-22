@@ -229,3 +229,32 @@ def test_csv_import_has_a_row_cap(client, monkeypatch):
     rows = "date,amount,merchant\n" + "2026-10-01,100,Shop\n" * 4
     res = client.post(f"/api/transactions/upload-csv/{uid}", files={"file": ("s.csv", rows, "text/csv")}, headers=auth(token))
     assert res.status_code == 400 and "at most 3" in res.json()["detail"]
+
+
+def test_days_follow_indian_time():
+    from datetime import datetime
+
+    from app.services.game import today_key
+    from app.utils import ist_day_start_utc
+
+    # 20:00 UTC on the 1st is 01:30 IST on the 2nd.
+    assert today_key(datetime(2026, 10, 1, 20, 0)) == "2026-10-02"
+    assert ist_day_start_utc(datetime(2026, 10, 1, 20, 0)) == datetime(2026, 10, 1, 18, 30)
+
+
+def test_kyc_under_review_cannot_be_resubmitted(client):
+    uid, token, _ = signed_in(client)
+    run(db.users.update_one({"id": uid}, {"$set": {"kyc": {"status": "review"}}}))
+    res = client.post("/api/kyc/submit", json={"user_id": uid, "pan": "ABCPE7777F", "full_name": "Test Pep", "dob": "1990-01-01", "consent": True}, headers=auth(token))
+    assert res.status_code == 409
+
+
+def test_erasure_leaves_no_phone_keyed_records(client):
+    from app.services import privacy
+
+    uid, _, _ = signed_in(client)
+    phone = run(db.users.find_one({"id": uid}))["phone"]
+    client.post("/api/auth/send-otp", json={"phone": phone})
+    run(privacy.erase(uid))
+    assert run(db.otp_codes.find_one({"phone": phone})) is None
+    assert run(db.rate_limits.count_documents({"key": {"$regex": phone}})) == 0

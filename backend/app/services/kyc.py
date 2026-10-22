@@ -13,6 +13,7 @@ from datetime import date, datetime
 from typing import Dict, Optional
 
 from ..db import db
+from ..utils import ist_day_start_utc, ist_month_start_utc
 
 PAN_RE = re.compile(r"^[A-Z]{3}P[A-Z]\d{4}[A-Z]$")  # 4th letter P = individual
 
@@ -74,9 +75,8 @@ async def spent_since(user_id: str, since: datetime) -> float:
 
 
 async def usage(user: dict) -> Dict[str, float]:
-    now = datetime.utcnow()
-    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    month = day.replace(day=1)
+    # Limits reset at midnight in India, not at 05:30 (UTC midnight).
+    day, month = ist_day_start_utc(), ist_month_start_utc()
     return {"today": await spent_since(user["id"], day), "this_month": await spent_since(user["id"], month)}
 
 

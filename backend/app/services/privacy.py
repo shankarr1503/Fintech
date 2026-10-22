@@ -7,6 +7,7 @@ kept in restricted form, keyed only by an opaque user id, and flagged with a
 `retain_until` date so a scheduled job can purge them afterwards. GDPR and the
 DPDP Act both allow retention when the law requires it.
 """
+import re
 from datetime import datetime, timedelta
 from typing import Any, Dict
 
@@ -62,5 +63,13 @@ async def erase(user_id: str) -> Dict[str, Any]:
     if user and user.get("kyc"):
         # Encrypted KYC record moves to restricted storage for the PMLA period; nothing else of the profile is kept.
         await db.kyc_retained.insert_one({"user_id": user_id, "kyc": user["kyc"], "retain_until": retain_until})
+    if user:
+        # Leftovers keyed by phone number or user id rather than a user_id field.
+        phone = user.get("phone", "")
+        await db.otp_codes.delete_many({"phone": phone})
+        keys = [re.escape(k) for k in (user_id, phone) if k]
+        await db.rate_limits.delete_many({"key": {"$regex": "|".join(keys)}})
+        await db.game_claims.delete_many({"key": {"$regex": re.escape(user_id)}})
+        await db.payment_locks.delete_many({"user_id": user_id})
     await db.users.delete_one({"id": user_id})
     return {"deleted": deleted, "retained": RETAINED, "retain_until": retain_until.date().isoformat()}

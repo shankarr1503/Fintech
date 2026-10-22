@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from bson import ObjectId
 
@@ -26,6 +26,27 @@ def serialize_doc(doc):
                 result[key] = value
         return result
     return doc
+
+
+# Indian Standard Time has no daylight saving, so a fixed offset is exact.
+IST = timezone(timedelta(hours=5, minutes=30), "IST")
+IST_OFFSET = timedelta(hours=5, minutes=30)
+
+
+def to_ist(utc_naive: datetime) -> datetime:
+    """A stored naive-UTC timestamp as naive IST wall-clock time."""
+    return utc_naive + IST_OFFSET
+
+
+def ist_day_start_utc(now: datetime | None = None) -> datetime:
+    """Naive UTC instant of the most recent IST midnight: when "today" began for our users."""
+    local = to_ist(now or datetime.utcnow())
+    return local.replace(hour=0, minute=0, second=0, microsecond=0) - IST_OFFSET
+
+
+def ist_month_start_utc(now: datetime | None = None) -> datetime:
+    local = to_ist(now or datetime.utcnow())
+    return local.replace(day=1, hour=0, minute=0, second=0, microsecond=0) - IST_OFFSET
 
 
 def months_ago_label(n: int, now: datetime | None = None) -> str:

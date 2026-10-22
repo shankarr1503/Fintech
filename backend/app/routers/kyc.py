@@ -47,8 +47,13 @@ async def submit_kyc(body: KycSubmit, request: Request):
     if kyc.age_on(body.dob) < 18:
         raise HTTPException(status_code=400, detail="You must be 18 or older to complete KYC")
     user = await db.users.find_one({"id": uid})
-    if user.get("kyc", {}).get("status") == "verified":
+    status = user.get("kyc", {}).get("status")
+    if status == "verified":
         raise HTTPException(status_code=409, detail="Your KYC is already complete")
+    if status == "review":
+        # A screening match is decided by our compliance team; resubmitting with a tweaked name
+        # must not turn it into "verified" while the alert is still open.
+        raise HTTPException(status_code=409, detail="Your identity check is with our team. We'll update you within 2 working days.")
     if await db.users.find_one({"kyc.pan_hash": crypto.blind_index(pan), "id": {"$ne": uid}}):
         raise HTTPException(status_code=409, detail="This PAN is already linked to another account")
 
