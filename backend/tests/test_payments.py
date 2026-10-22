@@ -221,3 +221,27 @@ def test_card_numbers_in_notes_are_masked(client):
     res = pay(client, uid, h, 120, note="card 4111 1111 1111 1111 thx").json()
     stored = run(db.upi_transactions.find_one({"id": res["transaction_id"]}))
     assert "4111 1111" not in stored["note"] and "••••1111" in stored["note"]
+
+
+def test_webhook_without_rail_ref_only_touches_the_named_payment(client):
+    a, ha = new_user(client)
+    b, hb = new_user(client)
+    b_txn = pay(client, b, hb, 710, to="timeout@coinquest").json()["transaction_id"]
+    a_txn = pay(client, a, ha, 720, to="timeout@coinquest").json()["transaction_id"]
+    event = {"event_id": uuid.uuid4().hex, "type": "payment.updated", "txn_id": a_txn, "status": "failed"}
+    assert webhook(client, event).json()["applied"] is True
+    assert client.get(f"/api/upi/transactions/{a_txn}", headers=ha).json()["status"] == "failed"
+    assert client.get(f"/api/upi/transactions/{b_txn}", headers=hb).json()["status"] == "pending"
+    neither = {"event_id": uuid.uuid4().hex, "type": "payment.updated", "status": "success"}
+    assert webhook(client, neither).status_code == 400
+
+
+def test_failed_webhook_is_not_remembered_and_receipts_dedupe(client):
+    uid, h = new_user(client)
+    bad = {"event_id": uuid.uuid4().hex, "type": "payment.received", "user_id": uid, "amount": "nan", "rail_ref": "r-nan"}
+    assert webhook(client, bad).status_code == 400
+    fixed = {**bad, "amount": 250}
+    assert webhook(client, fixed).json() == {"received": True}  # the retry is processed, not "duplicate"
+    again = {**fixed, "event_id": uuid.uuid4().hex}
+    assert webhook(client, again).json()["duplicate"] is True  # same rail_ref, new event id
+    assert run(db.upi_transactions.count_documents({"rail_ref": "r-nan", "type": "upi_receive"})) == 1
