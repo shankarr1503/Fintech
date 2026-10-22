@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from ..auth import current_user, require_step_up
+from ..auth import current_user, use_step_up
 
 from ..config import settings
 from ..db import db
@@ -138,7 +138,7 @@ async def _send(uid: str, amount: float, recipient: str, note: str, body: "SendM
         reset_at = user.get("pin_reset_at")
         if reset_at and datetime.utcnow() - reset_at < timedelta(hours=24):
             raise HTTPException(status_code=403, detail="For your safety, payments of ₹2,000 or more are paused for 24 hours after a PIN reset.")
-        require_step_up(request)
+        await use_step_up(request)
 
     txn_id = payments.new_txn_id()
     now = datetime.utcnow()

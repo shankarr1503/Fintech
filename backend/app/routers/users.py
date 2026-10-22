@@ -5,6 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request
 
 from ..db import db
+from ..auth import use_step_up
 from .auth import public_user
 from ..models import DeleteAccountRequest, LanguageUpdate, SecuritySettings, SupportRequest, UserUpdate
 from ..services import audit, game, pci, privacy
@@ -48,7 +49,10 @@ async def update_user(user_id: str, user_data: UserUpdate):
 
 @router.delete("/users/{user_id}")
 async def delete_user_account(user_id: str, body: DeleteAccountRequest, request: Request):
-    """Erase the account. Payment, KYC and audit records are kept only as the law requires (see services/privacy.py)."""
+    """Erase the account. Payment, KYC and audit records are kept only as the law requires (see services/privacy.py).
+
+    Needs a fresh PIN confirmation (X-Step-Up-Token): erasure can't be undone."""
+    await use_step_up(request)
     await audit.record("account_erasure_requested", user_id, {"reason": (body.reason or "")[:100]}, request)
     result = await privacy.erase(user_id)
     await audit.record("account_erased", user_id, {"retain_until": result["retain_until"]}, request)

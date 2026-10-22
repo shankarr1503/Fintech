@@ -23,6 +23,12 @@ def otp_login(client, phone, device="dev-1"):
     return client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10", "confirm_age": True}, headers=h).json(), h
 
 
+def with_pin(client, first, pin="4826"):
+    """Finish a first sign-in the way the app does: set the PIN before anything else."""
+    assert client.post("/api/auth/pin", json={"pin": pin}, headers=auth(first["token"])).status_code == 200
+    return first
+
+
 def auth(token, extra=None):
     return {"Authorization": f"Bearer {token}", **(extra or {})}
 
@@ -57,6 +63,25 @@ def test_pin_locks_after_five_wrong_attempts(client):
     assert still.status_code == 423  # even the right PIN is refused while locked
 
 
+def test_otp_only_session_can_do_nothing_but_set_the_pin(client):
+    first, _ = otp_login(client, "9100000010")
+    uid, h = first["user"]["id"], auth(first["token"])
+    assert client.get(f"/api/dashboard/{uid}", headers=h).status_code == 403
+    assert client.post("/api/auth/pin", json={"pin": "4826"}, headers=h).status_code == 200
+    assert client.get(f"/api/dashboard/{uid}", headers=h).status_code == 200
+
+
+def test_step_up_token_confirms_one_payment_only(client):
+    first = with_pin(client, otp_login(client, "9100000011")[0])
+    uid, h = first["user"]["id"], auth(first["token"])
+    run(db.users.update_one({"id": uid}, {"$set": {"kyc.status": "verified"}}))
+    step = client.post("/api/auth/pin/verify", json={"pin": "4826"}, headers=h).json()["step_up_token"]
+    body = {"user_id": uid, "recipient_upi": "rahul@paytm", "amount": 2500}
+    assert client.post("/api/upi/send-money", json=body, headers={**h, "X-Step-Up-Token": step}).status_code == 200
+    again = client.post("/api/upi/send-money", json={**body, "recipient_upi": "priya@okaxis"}, headers={**h, "X-Step-Up-Token": step})
+    assert again.status_code == 428
+
+
 def test_mfa_token_cannot_be_used_as_a_session(client):
     first, _ = otp_login(client, "9100000003")
     client.post("/api/auth/pin", json={"pin": "6084"}, headers=auth(first["token"]))
@@ -65,7 +90,7 @@ def test_mfa_token_cannot_be_used_as_a_session(client):
 
 
 def test_idle_sessions_time_out(client):
-    first, _ = otp_login(client, "9100000004")
+    first = with_pin(client, otp_login(client, "9100000004")[0])
     uid = first["user"]["id"]
     assert client.get(f"/api/game/profile/{uid}", headers=auth(first["token"])).status_code == 200
     run(db.sessions.update_many({"user_id": uid}, {"$set": {"last_seen": datetime.utcnow() - timedelta(minutes=16)}}))
@@ -99,7 +124,7 @@ def test_step_up_token_is_bound_to_the_session(client):
 
 
 def test_audit_chain_records_and_detects_tampering(client):
-    first, _ = otp_login(client, "9100000007")
+    first = with_pin(client, otp_login(client, "9100000007")[0])
     uid = first["user"]["id"]
     trail = client.get(f"/api/security/audit-log/{uid}", headers=auth(first["token"])).json()
     actions = [t["action"] for t in trail]
@@ -117,7 +142,7 @@ def test_audit_chain_records_and_detects_tampering(client):
 
 
 def test_notification_preferences_keep_security_alerts_on(client):
-    first, _ = otp_login(client, "9100000008")
+    first = with_pin(client, otp_login(client, "9100000008")[0])
     uid = first["user"]["id"]
     res = client.put("/api/notifications/prefs", json={"user_id": uid, "prefs": {"security": False, "marketing": True, "rewards": False}}, headers=auth(first["token"])).json()
     assert res["prefs"]["security"] is True and res["prefs"]["marketing"] is True and res["prefs"]["rewards"] is False

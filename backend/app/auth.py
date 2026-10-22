@@ -21,6 +21,7 @@ from typing import Optional
 import jwt
 from fastapi import HTTPException, Request
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from .config import settings
 from .db import db
@@ -35,6 +36,8 @@ STEP_UP_TTL = timedelta(minutes=5)
 PIN_ATTEMPTS = 5
 PIN_LOCK = timedelta(minutes=15)
 PBKDF2_ROUNDS = 210_000
+# All an OTP-only session (no PIN set yet) may call: the PIN is the second factor, not optional.
+PIN_SETUP_PATHS = {"/api/auth/pin", "/api/auth/logout"}
 
 _secret = settings.secret_key
 if not _secret:
@@ -153,24 +156,41 @@ def user_from_mfa(token: str) -> str:
 
 def step_up_token(user_id: str, sid: str) -> str:
     """Proof of a fresh PIN entry, required for large payments. Bound to the session."""
-    return _encode({"sub": user_id, "sid": sid, "typ": "step_up"}, STEP_UP_TTL)
+    return _encode({"sub": user_id, "sid": sid, "typ": "step_up", "jti": secrets.token_urlsafe(12)}, STEP_UP_TTL)
 
 
-def require_step_up(request: Request) -> None:
+def require_step_up(request: Request) -> dict:
     token = request.headers.get("x-step-up-token")
     if not token:
         raise HTTPException(status_code=428, detail="Enter your PIN to confirm this payment")
-    claims = _decode(token, "step_up")
+    try:
+        claims = _decode(token, "step_up")
+    except HTTPException:
+        # Not 401: the session is fine, only the PIN confirmation expired. Ask for the PIN again.
+        raise HTTPException(status_code=428, detail="Your PIN confirmation expired. Enter your PIN again.")
     if claims["sub"] != request.state.user_id or claims.get("sid") != request.state.session_id:
         raise HTTPException(status_code=403, detail="PIN confirmation doesn't match this session")
+    return claims
 
 
-async def create_session(user_id: str, request: Request) -> str:
+async def use_step_up(request: Request) -> None:
+    """require_step_up, and spend the token: one PIN entry confirms one sensitive action."""
+    claims = require_step_up(request)
+    try:
+        await db.used_step_ups.insert_one({"jti": claims["jti"], "expires_at": _now() + STEP_UP_TTL})
+    except (KeyError, DuplicateKeyError):
+        raise HTTPException(status_code=428, detail="Enter your PIN to confirm this payment")
+
+
+async def create_session(user_id: str, request: Request, needs_pin: bool = False) -> str:
+    """`needs_pin`: the user signed in with only an OTP and has no PIN yet. Until they set one,
+    the session can do nothing but set it (see PIN_SETUP_PATHS)."""
     sid = secrets.token_urlsafe(18)
     now = _now()
     await db.sessions.insert_one({
         "sid": sid,
         "user_id": user_id,
+        "needs_pin": needs_pin,
         **device_of(request),
         "ip": request.client.host if request.client else "unknown",
         "created_at": now,
@@ -220,6 +240,13 @@ async def require_user(request: Request) -> str:
             claimed.append(body.get("user_id"))
     if any(c is not None and c != user_id for c in claimed):
         raise HTTPException(status_code=403, detail="You can only access your own account")
+
+    if session.get("needs_pin") and request.url.path not in PIN_SETUP_PATHS:
+        user = await db.users.find_one({"id": user_id}, {"pin": 1})
+        if not (user or {}).get("pin"):
+            # 403 rather than 401: the session is fine, it just can't be used until the PIN exists.
+            raise HTTPException(status_code=403, detail="Set up your app PIN first")
+        await db.sessions.update_one({"sid": session["sid"]}, {"$set": {"needs_pin": False}})
 
     request.state.user_id = user_id
     request.state.session_id = session["sid"]

@@ -26,7 +26,10 @@ def sign_in(client, phone):
     res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": sent["demo_otp"], "accept_terms": "2026-10", "confirm_age": True})
     assert res.status_code == 200
     body = res.json()
-    return body["user"], {"Authorization": f"Bearer {body['token']}"}
+    headers = {"Authorization": f"Bearer {body['token']}"}
+    # The app makes new users set a PIN before anything else; the API enforces it.
+    assert client.post("/api/auth/pin", json={"pin": "4826"}, headers=headers).status_code == 200
+    return body["user"], headers
 
 
 @pytest.fixture(scope="module")
