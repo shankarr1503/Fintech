@@ -100,8 +100,8 @@ export const verifyOTP = async (phone: string, otp: string, consent = false) => 
 };
 
 /** Public, OTP-verified account deletion for people who can't sign in. */
-export const requestDeletion = async (phone: string, otp: string) =>
-  (await api.post('/privacy/deletion-request', { phone, otp, confirm: true })).data as { deleted: boolean; message: string; retain_until?: string };
+export const requestDeletion = async (phone: string, otp: string, pin?: string) =>
+  (await api.post('/privacy/deletion-request', { phone, otp, confirm: true, ...(pin ? { pin } : {}) })).data as { deleted: boolean; message: string; retain_until?: string };
 
 export const getAppConfig = async () => (await api.get('/app-config')).data as { demo_mode: boolean; terms_version: string };
 
@@ -254,8 +254,8 @@ export const updateUser = async (
   return response.data;
 };
 
-export const deleteUserAccount = async (userId: string, reason?: string) => {
-  const response = await api.delete(`/users/${userId}`, { data: { user_id: userId, reason } });
+export const deleteUserAccount = async (userId: string, reason: string | undefined, stepUpToken: string) => {
+  const response = await api.delete(`/users/${userId}`, { data: { user_id: userId, reason }, headers: { 'X-Step-Up-Token': stepUpToken } });
   return response.data;
 };
 

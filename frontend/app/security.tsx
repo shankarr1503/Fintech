@@ -13,6 +13,7 @@ import {
   listSessions,
   setPin,
   updateSecuritySettings,
+  verifyPin,
 } from '../src/services/api';
 import { BIOMETRIC_KEY, biometricAvailable } from '../src/ui/AppLock';
 import { PinPad } from '../src/ui/PinPad';
@@ -57,7 +58,7 @@ export default function Security() {
   const { logout } = useAuth();
   const [busy, setBusy] = useState(false);
   const [hasBio, setHasBio] = useState(false);
-  const [pinStep, setPinStep] = useState<null | 'current' | 'new'>(null);
+  const [pinStep, setPinStep] = useState<null | 'current' | 'new' | 'delete'>(null);
   const [currentPin, setCurrentPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
   const { data, setData, loading, reload, userId, error } = useUserData(async (id) => {
@@ -144,6 +145,21 @@ export default function Security() {
   };
 
   const onPin = async (pin: string) => {
+    if (pinStep === 'delete') {
+      // Erasure can't be undone, so the server wants a fresh PIN confirmation for it.
+      setBusy(true);
+      try {
+        const { step_up_token } = await verifyPin(pin);
+        await deleteUserAccount(userId, 'User requested deletion', step_up_token);
+        closePin();
+        await logout();
+      } catch (e) {
+        setPinError(errorMessage(e));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (pinStep === 'current') {
       setCurrentPin(pin);
       setPinError(null);
@@ -181,14 +197,7 @@ export default function Security() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteUserAccount(userId, 'User requested deletion');
-            await logout();
-          } catch (e) {
-            Alert.alert("Couldn't delete", errorMessage(e));
-          }
-        },
+        onPress: () => setPinStep('delete'),
       },
     ]);
 
@@ -255,10 +264,10 @@ export default function Security() {
       <Small style={{ marginTop: 18 }} color={C.ink3}>
         Something here you don&apos;t recognise? Sign out other devices, change your PIN and write to support straight away.
       </Small>
-      <Sheet visible={!!pinStep} onClose={closePin} title={pinStep === 'new' ? 'New PIN' : 'Current PIN'}>
+      <Sheet visible={!!pinStep} onClose={closePin} title={pinStep === 'new' ? 'New PIN' : pinStep === 'delete' ? 'Delete account' : 'Current PIN'}>
         <PinPad
           key={pinStep ?? 'none'}
-          title={pinStep === 'new' ? 'Choose a new PIN' : 'Enter your current PIN'}
+          title={pinStep === 'new' ? 'Choose a new PIN' : pinStep === 'delete' ? 'Enter your PIN to delete your account' : 'Enter your current PIN'}
           subtitle={pinStep === 'new' ? '4 to 6 digits. Avoid 1234, 0000 and your birth year.' : undefined}
           error={pinError}
           busy={busy}

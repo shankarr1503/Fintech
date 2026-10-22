@@ -149,6 +149,8 @@ export default function AmountScreen() {
           else if (known.status === 'processing') finish({ status: 'pending', amount: value, transaction_id: '', reason: 'Waiting for the bank to confirm' });
           else finish(known);
         } else if (status === 428) {
+          // First large payment, or the earlier confirmation was spent or expired: ask for the PIN.
+          if (opts.stepUpToken) setPinError('Your PIN confirmation expired. Confirm your PIN again.');
           setAskPin(true);
         } else if (isStepUpExpired(e)) {
           // Only the 5-minute PIN confirmation lapsed; nothing was sent.
