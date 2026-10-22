@@ -23,6 +23,13 @@ const EXPLAIN: Record<string, string> = {
   on_hold: 'Held for a routine security check. No money has moved. We will update you within 24 hours.',
   failed: "If your bank shows a debit, it reverses it automatically by the next working day. See the Refund Policy if it doesn’t.",
 };
+const STILL_PENDING = "Your bank still hasn't confirmed. In rare cases this takes a few hours. We'll notify you when it settles, and Activity shows the latest status. Please don't pay again.";
+
+// The server reconciles payments stuck in pending after 2 minutes (RECONCILE_AFTER), so poll past that,
+// backing off from 2s to 15s between checks.
+const POLL_FOR_MS = 5 * 60_000;
+const POLL_FIRST_MS = 2000;
+const POLL_MAX_MS = 15_000;
 
 export default function PaymentSuccess() {
   const router = useRouter();
@@ -42,25 +49,42 @@ export default function PaymentSuccess() {
     ]).start();
   }, [r, router, pop, rise]);
 
-  // Pending: keep asking for the final answer for about a minute.
+  // Pending: keep asking for the final answer, one request at a time. Late answers after
+  // unmount or after a final state are ignored.
+  const first = useRef(r).current;
+  const [stillPending, setStillPending] = useState(false);
   useEffect(() => {
-    if (!r || r.status !== 'pending' || !r.txnId) return;
-    let tries = 0;
-    const id = setInterval(async () => {
-      tries++;
+    if (!first || first.status !== 'pending' || !first.txnId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let delay = POLL_FIRST_MS;
+    const started = Date.now();
+    const tick = async () => {
       try {
-        const latest = await getPaymentStatus(r.txnId);
+        const latest = await getPaymentStatus(first.txnId);
+        if (cancelled) return;
         if (latest.status !== 'pending') {
-          setR({ ...r, status: latest.status, reason: latest.reason, coins: latest.coins_earned ?? r.coins, ref: latest.rail_ref || r.ref });
-          clearInterval(id);
+          cancelled = true;
+          setR((cur) => cur && { ...cur, status: latest.status, reason: latest.reason, coins: latest.coins_earned ?? cur.coins, ref: latest.rail_ref || cur.ref });
+          return;
         }
       } catch {
         // offline or server busy: try again on the next tick
+        if (cancelled) return;
       }
-      if (tries >= 20) clearInterval(id);
-    }, 3000);
-    return () => clearInterval(id);
-  }, [r]);
+      if (Date.now() - started >= POLL_FOR_MS) {
+        setStillPending(true);
+        return;
+      }
+      delay = Math.min(delay * 1.5, POLL_MAX_MS);
+      timer = setTimeout(tick, delay);
+    };
+    timer = setTimeout(tick, delay);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [first]);
 
   if (!r) return null;
   const state = STATE[r.status] ?? STATE.success;
@@ -96,7 +120,7 @@ export default function PaymentSuccess() {
           {!ok && (
             <Text style={styles.explain} accessibilityLiveRegion="polite">
               {r.reason && r.status === 'failed' ? `${r.reason}. ` : ''}
-              {EXPLAIN[r.status]}
+              {r.status === 'pending' && stillPending ? STILL_PENDING : EXPLAIN[r.status]}
             </Text>
           )}
         </View>
