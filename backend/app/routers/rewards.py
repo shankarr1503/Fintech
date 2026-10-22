@@ -65,17 +65,15 @@ async def redeem_reward(redemption: dict):
         raise HTTPException(status_code=404, detail="Deal not found")
     coins_required = deal["coins_required"]  # never trust the client's price
     
-    user = await db.users.find_one({"id": user_id})
-    current_coins = user.get("reward_coins", 0) if user else 0
-    
-    if current_coins < coins_required:
-        raise HTTPException(status_code=400, detail="Insufficient coins")
-    
-    # Deduct coins
-    await db.users.update_one(
-        {"id": user_id},
+    # Check and deduct in one step, so parallel redemptions can't spend the same coins twice.
+    res = await db.users.update_one(
+        {"id": user_id, "reward_coins": {"$gte": coins_required}},
         {"$inc": {"reward_coins": -coins_required}}
     )
+    if res.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient coins")
+    user = await db.users.find_one({"id": user_id})
+    current_coins = user.get("reward_coins", 0) + coins_required
     
     # Generate voucher code
     voucher_code = f"FW{uuid.uuid4().hex[:8].upper()}"

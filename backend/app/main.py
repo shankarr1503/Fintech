@@ -51,6 +51,8 @@ async def lifespan(_app: FastAPI):
     await db.idempotency.create_index([("user_id", 1), ("key", 1)], unique=True)
     await db.idempotency.create_index("expires_at", expireAfterSeconds=0)
     await db.webhook_events.create_index("event_id", unique=True)
+    await db.game_claims.create_index("key", unique=True)
+    await db.game_claims.create_index("expires_at", expireAfterSeconds=0)
     await db.upi_transactions.create_index([("user_id", 1), ("timestamp", -1)])
     await db.upi_transactions.create_index("rail_ref")
     await db.audit_logs.create_index([("user_id", 1), ("seq", -1)])

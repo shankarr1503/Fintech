@@ -8,6 +8,8 @@ can celebrate them.
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from pymongo.errors import DuplicateKeyError
+
 from ..db import db
 
 # action -> (xp, coins)
@@ -26,6 +28,24 @@ ACTIONS: Dict[str, tuple] = {
     "transaction_categorised": (10, 0),
     "reward_redeemed": (10, 0),
     "profile_updated": (5, 0),
+}
+
+# How many times a day an action can pay XP and coins. Stops farming by creating and deleting
+# goals, debts or consents in a loop; anything past the cap is still recorded, just unpaid.
+DAILY_CAPS: Dict[str, int] = {
+    "goal_created": 3,
+    "goal_completed": 2,
+    "debt_added": 3,
+    "debt_payment": 5,
+    "boss_defeated": 2,
+    "bill_paid": 5,
+    "module_complete": 5,
+    "account_linked": 1,
+    "transaction_categorised": 10,
+    "reward_redeemed": 5,
+    "profile_updated": 1,
+    "goal_contribution": 5,
+    "payment_sent": 20,
 }
 
 TITLES = [
@@ -107,6 +127,30 @@ async def _get_profile(user_id: str) -> Dict:
     return profile
 
 
+async def claim_once(key: str, ttl: Optional[timedelta] = None) -> bool:
+    """Atomically claim `key`; True for exactly one caller, however many race for it.
+
+    Backed by a unique index on game_claims.key, so check-then-act gaps can't pay a reward twice."""
+    doc = {"key": key, "at": datetime.utcnow()}
+    if ttl:
+        doc["expires_at"] = datetime.utcnow() + ttl
+    try:
+        await db.game_claims.insert_one(doc)
+        return True
+    except DuplicateKeyError:
+        return False
+
+
+async def _within_daily_cap(user_id: str, action: str, day: str) -> bool:
+    cap = DAILY_CAPS.get(action)
+    if cap is None:
+        return True
+    for slot in range(cap):
+        if await claim_once(f"cap:{user_id}:{action}:{day}:{slot}", ttl=timedelta(days=2)):
+            return True
+    return False
+
+
 async def _count_today(user_id: str, action: str, day: str) -> int:
     return await db.game_events.count_documents({"user_id": user_id, "action": action, "day": day})
 
@@ -142,24 +186,29 @@ async def award(user_id: str, action: str, bonus_coins: int = 0) -> Dict:
     if not user_id or action not in ACTIONS:
         return {}
     xp, coins = ACTIONS[action]
-    coins += bonus_coins
+    coins += max(0, bonus_coins)
     now = datetime.utcnow()
     day = today_key(now)
 
     profile = await _get_profile(user_id)
     old_level = level_for_xp(profile.get("xp", 0))
 
+    capped = not await _within_daily_cap(user_id, action, day)
+    if capped:
+        xp, coins = 0, 0
     await db.game_events.insert_one({
         "user_id": user_id, "action": action, "xp": xp, "coins": coins, "day": day, "timestamp": now,
+        **({"capped": True} if capped else {}),
     })
 
-    # Daily quest completion: fires exactly when the count reaches the target.
+    # Daily quest completion: fires once when the count of paid actions reaches the target.
+    # The claim makes sure concurrent requests can't each pay the same quest.
     quests_completed = []
-    done_today = set(profile.get("quests_done", {}).get(day, []))
-    for quest in quests_for_day(day):
-        if quest["action"] != action or quest["id"] in done_today:
+    for quest in [] if capped else quests_for_day(day):
+        if quest["action"] != action:
             continue
-        if await _count_today(user_id, action, day) >= quest["target"]:
+        paid_today = await db.game_events.count_documents({"user_id": user_id, "action": action, "day": day, "capped": {"$ne": True}})
+        if paid_today >= quest["target"] and await claim_once(f"quest:{user_id}:{day}:{quest['id']}"):
             quests_completed.append(quest)
             coins += quest["reward_coins"]
             xp += 20
@@ -180,6 +229,7 @@ async def award(user_id: str, action: str, bonus_coins: int = 0) -> Dict:
 
     return {
         "action": action,
+        "capped": capped,
         "xp_earned": xp,
         "coins_earned": coins,
         "total_xp": total_xp,
@@ -198,6 +248,9 @@ async def check_in(user_id: str) -> Dict:
     day = today_key(now)
     last = profile.get("last_checkin")
     if last == day:
+        return {"already_checked_in": True, "streak": profile.get("streak", 0)}
+
+    if not await claim_once(f"checkin:{user_id}:{day}"):
         return {"already_checked_in": True, "streak": profile.get("streak", 0)}
 
     yesterday = today_key(now - timedelta(days=1))

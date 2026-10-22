@@ -80,3 +80,74 @@ def test_profile_never_returns_pin_or_identity_secrets(client):
         assert body["id"] == uid and body["pin_set"] is True
         for secret in ("salt", "hash", "pin_attempts", "known_devices", "pan_encrypted", "dob_encrypted", "pan_hash"):
             assert secret not in text
+
+
+def coins(uid):
+    return run(db.users.find_one({"id": uid})).get("reward_coins", 0)
+
+
+def test_card_bill_coins_are_bounded(client):
+    uid, token, _ = signed_in(client)
+    h = auth(token)
+    for amount in (1e12, "inf", "nan", -5, 0):
+        assert client.post("/api/credit-cards/pay-bill", json={"card_bank": "HDFC", "amount": amount}, headers=h).status_code == 422
+    before = coins(uid)
+    res = client.post("/api/credit-cards/pay-bill", json={"card_bank": "HDFC", "amount": 9_000_000}, headers=h)
+    assert res.status_code == 200
+    assert coins(uid) - before <= 50 + 30  # per-bill cap plus a possible quest bonus
+
+
+def test_paid_off_debt_cannot_be_defeated_again(client):
+    uid, token, _ = signed_in(client)
+    h = auth(token)
+    zero = {"name": "Card", "type": "credit_card", "principal": 1000, "outstanding": 0, "interest_rate": 30, "emi_amount": 100, "remaining_tenure": 10}
+    assert client.post("/api/debts", json=zero, headers=h).status_code == 422
+    debt = client.post("/api/debts", json={**zero, "user_id": uid, "outstanding": 500}, headers=h).json()
+    first = client.post(f"/api/debts/{debt['id']}/pay", json={"amount": 500}, headers=h).json()
+    assert first["defeated"] is True
+    assert client.post(f"/api/debts/{debt['id']}/pay", json={"amount": 500}, headers=h).status_code == 409
+    defeats = run(db.game_events.count_documents({"user_id": uid, "action": "boss_defeated"}))
+    assert defeats == 1
+
+
+def test_tiny_goals_are_refused_and_completion_pays_once(client):
+    uid, token, _ = signed_in(client)
+    h = auth(token)
+    assert client.post("/api/savings", json={"user_id": uid, "name": "x", "target_amount": 0.01}, headers=h).status_code == 422
+    goal = client.post("/api/savings", json={"user_id": uid, "name": "Trip", "target_amount": 100}, headers=h).json()
+    assert client.post("/api/savings/contribute", json={"goal_id": goal["id"], "amount": 100}, headers=h).json()["completed"] is True
+    run(db.savings_goals.update_one({"id": goal["id"]}, {"$set": {"current_amount": 0}}))
+    client.post("/api/savings/contribute", json={"goal_id": goal["id"], "amount": 100}, headers=h)
+    assert run(db.game_events.count_documents({"user_id": uid, "action": "goal_completed"})) == 1
+
+
+def test_daily_cap_stops_reward_farming(client):
+    uid, token, _ = signed_in(client)
+    h = auth(token)
+    debt = {"user_id": uid, "name": "Loan", "type": "personal_loan", "principal": 1000, "outstanding": 1000, "interest_rate": 12, "emi_amount": 100, "remaining_tenure": 10}
+    before = coins(uid)
+    for _ in range(10):
+        client.post("/api/debts", json=debt, headers=h)
+    assert coins(uid) - before == 5 * 3  # debt_added pays 5 coins, three times a day
+
+
+def test_redeeming_never_overspends(client):
+    from app.routers.rewards import DEALS
+
+    uid, token, _ = signed_in(client)
+    h = auth(token)
+    deal = DEALS[0]
+    run(db.users.update_one({"id": uid}, {"$set": {"reward_coins": deal["coins_required"]}}))
+    codes = [client.post("/api/rewards/redeem", json={"user_id": uid, "deal_id": deal["id"]}, headers=h).status_code for _ in range(3)]
+    assert codes == [200, 400, 400]
+    assert coins(uid) >= 0
+
+
+def test_checkin_pays_once_even_when_requests_race(client):
+    from app.services import game
+
+    uid, token, _ = signed_in(client)
+    h = auth(token)
+    run(db.game_profiles.update_one({"user_id": uid}, {"$set": {"last_checkin": None}}, upsert=True))
+    run(game.claim_once(f"checkin:{uid}:{game.today_key()}"))  # as if a parallel request won the race
+    assert client.post("/api/game/checkin", json={"user_id": uid}, headers=h).json()["already_checked_in"] is True

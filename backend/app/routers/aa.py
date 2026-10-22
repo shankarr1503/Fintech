@@ -102,7 +102,7 @@ async def confirm_aa_consent(data: dict):
     ]
     
     result = await db.aa_consents.update_one(
-        {"id": consent_id, "user_id": user_id},
+        {"id": consent_id, "user_id": user_id, "status": "pending"},
         {
             "$set": {
                 "status": "active",
@@ -113,8 +113,9 @@ async def confirm_aa_consent(data: dict):
     )
     
     if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Consent not found")
-    reward = await game.award(user_id, "account_linked")
+        raise HTTPException(status_code=404, detail="No pending consent with that id")
+    # One reward per user for linking, not one per consent created.
+    reward = await game.award(user_id, "account_linked") if await game.claim_once(f"aa_linked:{user_id}") else None
     return {
         "status": "success",
         "message": "Accounts linked successfully!",

@@ -43,9 +43,14 @@ async def pay_debt(debt_id: str, payment: DebtPayment, request: Request):
     if not debt:
         raise HTTPException(status_code=404, detail="Debt not found")
 
-    paid = min(payment.amount, debt["outstanding"])
+    if debt["outstanding"] <= 0:
+        raise HTTPException(status_code=409, detail="This debt is already paid off")
+    paid = round(min(payment.amount, debt["outstanding"]), 2)
     outstanding = round(debt["outstanding"] - paid, 2)
-    await db.debts.update_one({"id": debt_id}, {"$set": {"outstanding": outstanding}})
+    # Compare-and-set on the balance we read, so two payments at once can't both apply.
+    res = await db.debts.update_one({"id": debt_id, "outstanding": debt["outstanding"]}, {"$set": {"outstanding": outstanding}})
+    if res.modified_count == 0:
+        raise HTTPException(status_code=409, detail="This debt just changed. Please try again.")
     await db.debt_payments.insert_one({
         "id": str(uuid.uuid4()), "debt_id": debt_id, "user_id": debt["user_id"],
         "amount": paid, "timestamp": datetime.utcnow(),
@@ -53,7 +58,7 @@ async def pay_debt(debt_id: str, payment: DebtPayment, request: Request):
 
     reward = await game.award(debt["user_id"], "debt_payment")
     defeated = outstanding <= 0
-    if defeated:
+    if defeated and await game.claim_once(f"boss:{debt_id}"):
         reward = await game.award(debt["user_id"], "boss_defeated")
     return {"debt_id": debt_id, "paid": paid, "outstanding": outstanding, "defeated": defeated, "reward": reward}
 

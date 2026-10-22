@@ -35,14 +35,17 @@ async def contribute_to_goal(contribution: SavingsContribution, request: Request
     
     was_complete = goal['current_amount'] >= goal['target_amount']
     new_amount = round(goal['current_amount'] + contribution.amount, 2)
-    await db.savings_goals.update_one(
-        {"id": contribution.goal_id},
+    res = await db.savings_goals.update_one(
+        {"id": contribution.goal_id, "current_amount": goal['current_amount']},
         {"$set": {"current_amount": new_amount}}
     )
+    if res.modified_count == 0:
+        raise HTTPException(status_code=409, detail="This goal just changed. Please try again.")
 
     reward = await game.award(goal['user_id'], "goal_contribution")
     completed = not was_complete and new_amount >= goal['target_amount']
-    if completed:
+    # A goal pays its completion bonus once, even if it's emptied and refilled.
+    if completed and await game.claim_once(f"goal_done:{goal['id']}"):
         reward = await game.award(goal['user_id'], "goal_completed")
     return {"message": "Contribution added", "new_total": new_amount, "completed": completed, "reward": reward}
 

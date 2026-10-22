@@ -3,16 +3,19 @@ import random
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from ..auth import current_user
 from ..config import settings
 from ..db import db
+from ..models import CardBillPayment
 from ..ratelimit import limit
 from ..services import game
 from ..utils import months_ago_label, serialize_doc
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+MAX_CARD_BILL_COINS = 50
 
 # Credit Score Management
 @router.get("/credit-score/{user_id}")
@@ -72,34 +75,33 @@ async def get_credit_score(user_id: str):
     return serialize_doc(score_data)
 
 @router.post("/credit-cards/pay-bill")
-async def pay_credit_card_bill(payment: dict):
+async def pay_credit_card_bill(payment: CardBillPayment, request: Request):
     """Pay credit card bill and earn rewards"""
-    user_id = payment.get("user_id")
-    card_bank = payment.get("card_bank")
-    amount = payment.get("amount", 0)
+    user_id = current_user(request)
     await limit(f"payments:{user_id}", 10, 60)
-    
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
+    if not settings.demo_mode:
+        # No card-bill rail is connected, so there's no real payment to record or reward.
+        raise HTTPException(status_code=503, detail="Card bill payments open once our BBPS partner is connected.")
+    amount = round(payment.amount, 2)
 
-    # 1 coin per ₹100 paid
-    coins_earned = int(amount / 100)
-    await db.users.update_one({"id": user_id}, {"$inc": {"reward_coins": coins_earned}})
-    
+    # 1 coin per ₹100 paid, at most 50 a bill; daily caps in game.award apply on top.
+    bonus = min(int(amount // 100), MAX_CARD_BILL_COINS)
+
     # Record payment
     payment_record = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
         "type": "credit_card_bill",
-        "card_bank": card_bank,
+        "card_bank": payment.card_bank,
         "amount": amount,
-        "coins_earned": coins_earned,
         "status": "success",
+        "sample": True,
         "timestamp": datetime.utcnow()
     }
-    await db.payments.insert_one(payment_record)
+    reward = await game.award(user_id, "bill_paid", bonus_coins=bonus)
+    coins_earned = reward.get("coins_earned", 0)
+    await db.payments.insert_one({**payment_record, "coins_earned": coins_earned})
     
-    reward = await game.award(user_id, "bill_paid")
     return {
         "message": "Bill paid successfully!",
         "amount_paid": amount,
