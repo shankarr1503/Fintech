@@ -31,7 +31,7 @@ export default function ScanScreen() {
     }
     handled.current = true;
     haptic('success');
-    router.replace({ pathname: '/pay/amount', params: { to: upi.to, name: upi.name ?? '', am: upi.amount ?? '', tn: upi.note ?? '' } });
+    router.replace({ pathname: '/pay/amount', params: { to: upi.to, name: upi.name ?? '', am: upi.amount ?? '', tn: upi.note ?? '', src: 'qr' } });
   };
 
   const granted = permission?.granted;

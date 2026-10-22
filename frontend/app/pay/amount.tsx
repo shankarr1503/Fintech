@@ -3,7 +3,7 @@ import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { errorMessage, getUPILinkedAccounts, isStepUpExpired, paymentByKey, requestMoneyUPI, sendMoneyUPI, verifyPin } from '../../src/services/api';
+import { errorMessage, getUPIHistory, getUPILinkedAccounts, isStepUpExpired, paymentByKey, requestMoneyUPI, sendMoneyUPI, verifyPin } from '../../src/services/api';
 import { useOnline } from '../../src/ui/OfflineBanner';
 import { PinPad } from '../../src/ui/PinPad';
 import { MAX_PAYMENT, MIN_PAYMENT, setReceipt } from '../../src/services/receipt';
@@ -38,7 +38,7 @@ type Account = { id: string; bank: string; account_number: string; is_primary: b
 
 export default function AmountScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ to: string; name?: string; am?: string; tn?: string; mode?: string }>();
+  const params = useLocalSearchParams<{ to: string; name?: string; am?: string; tn?: string; mode?: string; src?: string }>();
   const request = params.mode === 'request';
   // Merchant QR with a set amount. Only lock it if it can actually be paid; otherwise they type one.
   const am = params.am && /^\d+(\.\d{1,2})?$/.test(params.am) && Number(params.am) >= MIN_PAYMENT && Number(params.am) <= MAX_PAYMENT ? params.am : '';
@@ -57,6 +57,10 @@ export default function AmountScreen() {
   const { refresh } = useGame();
   useStatusBar('dark');
   const { data, userId } = useUserData((id) => getUPILinkedAccounts(id));
+  // Anyone can put any name in a QR code or link, so the new-payee warning depends only on the UPI ID.
+  const { data: history } = useUserData((id) => getUPIHistory(id));
+  const payee = params.to?.toLowerCase();
+  const paidBefore = Array.isArray(history) && history.some((t: any) => t.status === 'success' && (t.recipient ?? t.to)?.toLowerCase() === payee);
 
   const accounts: Account[] = data?.linked_accounts ?? [];
   const account = accounts.find((a) => a.id === source) ?? accounts.find((a) => a.is_primary) ?? accounts[0];
@@ -235,7 +239,8 @@ export default function AmountScreen() {
         <View style={[styles.row, { marginTop: 3 }]}>
           <Small>{params.to}</Small>
         </View>
-        {!params.name && <Small style={{ marginTop: 4 }}>New payee: check the UPI ID carefully before you pay</Small>}
+        {params.src === 'qr' && params.name ? <Small style={{ marginTop: 4 }}>Name from the QR code, not verified</Small> : null}
+        {!paidBefore && <Small style={{ marginTop: 4 }}>New payee: check the UPI ID carefully before you pay</Small>}
       </View>
 
       <Animated.View style={[styles.amountWrap, { transform: [{ translateX: shake }] }]} accessible accessibilityLabel={`Amount ${value || 0} rupees`} testID="amount-display">
