@@ -93,8 +93,9 @@ export default function RootLayout() {
               <OfflineBanner />
               <CookieNotice />
               <PageMeta />
-              <AppLock />
             </GameProvider>
+            {/* Outside the keyed subtree: a theme switch must neither reset nor re-trigger the lock. */}
+            <AppLock />
           </AuthProvider>
         )}
       </AppearanceProvider>
