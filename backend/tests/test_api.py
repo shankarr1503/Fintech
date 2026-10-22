@@ -308,6 +308,12 @@ def test_no_sample_data_outside_demo_mode(client, user, monkeypatch):
     assert all(l["id"] != "LN001" for l in client.get(f"/api/loans/active/{uid}").json())  # only real applications
     assert client.post(f"/api/transactions/mock-sync/{uid}").status_code == 404
     assert client.post("/api/rewards/redeem", json={"user_id": uid, "deal_id": "v_shop_50"}).status_code == 503
+    assert client.get(f"/api/investments/portfolio/{uid}").status_code == 503
+    assert client.post("/api/aa/initiate-consent", json={"user_id": uid}).status_code == 503
+    assert client.post("/api/bills/pay", json={"user_id": uid, "bill_id": "bill_insurance"}).status_code == 503
+    assert client.post("/api/credit-cards/pay-bill", json={"card_bank": "HDFC", "amount": 1000}).status_code == 503
+    eligibility = client.get(f"/api/loans/eligibility/{uid}").json()["eligible_loan_types"]
+    assert all(t["collateral_value"] == 0 for t in eligibility)
     assert client.get("/api/app-config").json()["demo_mode"] is False
 
 

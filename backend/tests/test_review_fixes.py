@@ -201,3 +201,12 @@ def test_debt_plan_rolls_extra_over_and_admits_when_it_never_ends():
     stuck = [{"name": "card", "outstanding": 100000, "interest_rate": 36, "emi_amount": 1000}]
     plan = calculate_debt_payoff(stuck, DebtStrategy.AVALANCHE)
     assert plan["pays_off"] is False and plan["debt_free_date"] is None and plan["total_months"] == 360
+
+
+def test_loans_are_bounded_by_eligibility_and_reject_nan(client):
+    uid, token, _ = signed_in(client)
+    h = auth(token)
+    base = {"user_id": uid, "loan_type": "loan_against_fd", "tenure": 12, "accept_key_facts": True}
+    for amount in (1e15, "NaN", "inf"):
+        assert client.post("/api/loans/apply", json={**base, "amount": amount}, headers=h).status_code == 400
+    assert client.post("/api/loans/quote", json={**base, "amount": 150000}, headers=h).status_code == 200
