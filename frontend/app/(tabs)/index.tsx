@@ -337,7 +337,7 @@ export default function Home() {
 
 const styles = themed(() => StyleSheet.create({
   demo: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.amberSoft, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginTop: 12 },
-  safe: { flex: 1, backgroundColor: C.paper },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   content: { paddingHorizontal: GUTTER, paddingBottom: 120 },
   header: { flexDirection: 'row', alignItems: 'center', paddingTop: 10, paddingBottom: 18 },
   row: { flexDirection: 'row', alignItems: 'center' },

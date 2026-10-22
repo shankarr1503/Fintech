@@ -7,7 +7,7 @@ import { Coin } from '../../src/game/Coin';
 import { useUserData } from '../../src/game/useData';
 import { Alert } from '../../src/ui/dialog';
 import { Body, Button, Divider, ErrorState, Heading, IconName, Label, Ring, Screen, Section, Sheet, SkeletonScreen, Small, Strong } from '../../src/ui/kit';
-import { C, F, GUTTER, R, tintFor, themed } from '../../src/ui/theme';
+import { C, F, GUTTER, ON_ACCENT, R, tintFor, themed } from '../../src/ui/theme';
 
 type Deal = { id: string; brand: string; title: string; coins_required: number; category: string; discount: string };
 
@@ -193,7 +193,7 @@ export default function RewardsTab() {
           {profile.achievements.map((a) => (
             <View key={a.id} style={styles.badge} accessible accessibilityLabel={`${a.name}. ${a.desc}. ${a.unlocked ? 'Earned' : 'Locked'}`}>
               <View style={[styles.badgeIcon, a.unlocked && { backgroundColor: C.gold }]}>
-                <Feather name={a.unlocked ? BADGE_ICON[a.icon] ?? 'award' : 'lock'} size={20} color={a.unlocked ? '#000000' : C.nightMuted} />
+                <Feather name={a.unlocked ? BADGE_ICON[a.icon] ?? 'award' : 'lock'} size={20} color={a.unlocked ? ON_ACCENT : C.nightMuted} />
               </View>
               <Small color={a.unlocked ? C.nightText : C.nightMuted} center style={{ marginTop: 8, fontFamily: F.medium }} numberOfLines={1}>
                 {a.name}

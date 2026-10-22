@@ -4,8 +4,8 @@
   "description": "Pay with UPI, track spending and bills, plan your way out of debt and build savings goals.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FFFFFF",
-  "theme_color": "#000000",
+  "background_color": "#06080F",
+  "theme_color": "#06080F",
   "lang": "en-IN",
   "icons": [{ "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }]
 }

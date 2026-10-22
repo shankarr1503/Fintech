@@ -18,7 +18,7 @@ const AppearanceContext = createContext<Ctx | undefined>(undefined);
 
 export function AppearanceProvider({ children }: { children: (scheme: Scheme) => ReactNode }) {
   const system = useColorScheme();
-  const [preference, setPref] = useState<AppearancePref>('system');
+  const [preference, setPref] = useState<AppearancePref>('dark') // dark glass is the signature look; light and system stay one tap away;
   const [ready, setReady] = useState(false);
   const returnRoute = useRef<string | null>(null);
 

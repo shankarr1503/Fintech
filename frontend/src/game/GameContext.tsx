@@ -160,8 +160,11 @@ function RewardToast({ toast, onDone }: { toast: Toast; onDone: () => void }) {
 
 const styles = themed(() => StyleSheet.create({
   wrap: { position: 'absolute', left: 14, right: 14, zIndex: 1000 },
+  // Smoked glass in both modes: it floats over any content, so it can't depend on what's beneath.
   toast: {
-    backgroundColor: C.night,
+    backgroundColor: 'rgba(14,17,28,0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
     borderRadius: R.md,
     padding: 14,
     shadowColor: '#000',

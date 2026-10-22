@@ -3,8 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { C, F, themed } from '../../src/ui/theme';
-import { haptic, IconName } from '../../src/ui/kit';
+import { C, F, ON_ACCENT, themed } from '../../src/ui/theme';
+import { Glass, haptic, IconName } from '../../src/ui/kit';
 
 // expo-router ships its own copy of the tab navigator types, so derive props from it.
 type BottomTabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
@@ -43,8 +43,11 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
       </Pressable>
     );
   };
+  // A floating pill of glass: content scrolls underneath it, blurred.
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+    <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 12) }]} pointerEvents="box-none">
+      <View style={styles.bar}>
+      <Glass strong radius={35} />
       {tab(0)}
       {tab(1)}
       <View style={styles.tab}>
@@ -58,18 +61,19 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
           accessibilityLabel="Scan and pay"
           style={({ pressed }) => [styles.scan, pressed && { transform: [{ scale: 0.94 }] }]}
         >
-          <Feather name="maximize" size={24} color={C.onPrimary} />
+          <Feather name="maximize" size={24} color={ON_ACCENT} />
         </Pressable>
       </View>
       {tab(2)}
       {tab(3)}
+      </View>
     </View>
   );
 }
 
 export default function TabsLayout() {
   return (
-    <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
+    <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: 'transparent' } }}>
       <Tabs.Screen name="index" />
       <Tabs.Screen name="money" />
       <Tabs.Screen name="rewards" />
@@ -79,25 +83,39 @@ export default function TabsLayout() {
 }
 
 const styles = themed(() => StyleSheet.create({
+  dock: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 14 },
   bar: {
     flexDirection: 'row',
-    backgroundColor: C.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.line,
-    paddingTop: 8,
+    alignItems: 'center',
+    height: 70,
+    borderRadius: 35,
+    overflow: 'visible',
+    backgroundColor: C.glass,
+    borderWidth: 1,
+    borderColor: C.lineStrong,
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
   },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 2 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   label: { fontFamily: F.medium, fontSize: 11, marginTop: 4 },
-  activeDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: C.ink, marginTop: 3 },
+  activeDot: { width: 14, height: 3, borderRadius: 2, backgroundColor: C.gold, marginTop: 4 },
   scan: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: C.primary,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: C.gold,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -26,
-    borderWidth: 4,
-    borderColor: C.paper,
+    marginTop: -30,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
+    shadowColor: C.gold,
+    shadowOpacity: 0.55,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
   },
 }));

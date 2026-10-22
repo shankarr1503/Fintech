@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { errorMessage, verifyPin } from '../services/api';
 import { Coin } from '../game/Coin';
+import { Backdrop } from './kit';
 import { PinPad } from './PinPad';
 import { C, F, themed } from './theme';
 
@@ -81,6 +82,7 @@ export function AppLock() {
 
   return (
     <View style={styles.root} accessibilityViewIsModal testID="app-lock">
+      <Backdrop />
       <View style={styles.brand}>
         <Coin size={22} />
         <Text style={styles.brandText}>CoinQuest is locked</Text>
@@ -95,7 +97,8 @@ export function AppLock() {
 
 const styles = themed(() =>
   StyleSheet.create({
-    root: { ...StyleSheet.absoluteFillObject, backgroundColor: C.night, alignItems: 'center', justifyContent: 'center', zIndex: 2000 },
+    // Opaque: the lock must hide what's behind it, so it's the base colour plus its own aurora, not glass.
+    root: { ...StyleSheet.absoluteFillObject, backgroundColor: C.paper, alignItems: 'center', justifyContent: 'center', zIndex: 2000 },
     brand: { position: 'absolute', top: 64, flexDirection: 'row', alignItems: 'center', gap: 8 },
     brandText: { fontFamily: F.medium, fontSize: 14, color: C.nightMuted },
     logout: { marginTop: 22, paddingVertical: 8, paddingHorizontal: 12 },

@@ -1,14 +1,20 @@
 // CoinQuest design tokens. See docs/design/DESIGN.md for the reasoning.
 //
-// Calm, trust-first palette: deep navy for primary surfaces and actions,
-// green for money in and success, red only for problems, gold only for rewards.
-// `C` always points at the active palette (light or dark); styles built with
-// `themed()` are recomputed when the palette changes.
+// Dark glassmorphism ("liquid glass"): every surface is frosted glass floating over one
+// aurora backdrop (see Backdrop in kit.tsx). Surfaces are translucent fills with a hairline
+// light border; one mint accent for progress and rewards; states are luminous tints that
+// always also carry an icon and a word, so meaning never relies on colour alone.
+// `C` always points at the active palette; styles built with `themed()` follow it.
 
 type Palette = {
+  /** Opaque base colour under the aurora (and behind anything that must not show through). */
   paper: string;
   paperDeep: string;
   surface: string;
+  /** Denser glass for sheets, the tab bar and sticky footers, where content scrolls beneath. */
+  glass: string;
+  /** The liquid sheen across the top of glass surfaces. */
+  sheen: string;
   ink: string;
   ink2: string;
   ink3: string;
@@ -32,80 +38,107 @@ type Palette = {
   blueSoft: string;
   amber: string;
   amberSoft: string;
+  /** Aurora light pools behind the glass. */
+  aurora: [string, string, string];
 };
 
-// Black and white only: every token is a shade of grey. Meaning never relies on colour alone;
-// states carry an icon and a word (Paid / Pending / Failed). Text meets WCAG AA (4.5:1) or better.
-const LIGHT: Palette = {
-  paper: '#FFFFFF',
-  paperDeep: '#F2F2F2',
-  surface: '#FFFFFF',
-  ink: '#000000',
-  ink2: '#333333',
-  ink3: '#595959',
-  line: '#E0E0E0',
-  lineStrong: '#BDBDBD',
+// Text contrast is checked against the darkest and lightest the backdrop gets under glass;
+// every pair used for text meets WCAG AA (4.5:1). See DESIGN.md.
+const DARK: Palette = {
+  paper: '#06080F',
+  paperDeep: 'rgba(255,255,255,0.07)',
+  surface: 'rgba(255,255,255,0.065)',
+  glass: 'rgba(14,17,28,0.72)',
+  sheen: 'rgba(255,255,255,0.09)',
+  ink: '#F4F6FB',
+  ink2: '#D2D7E4',
+  ink3: '#B4BBCB',
+  line: 'rgba(255,255,255,0.11)',
+  lineStrong: 'rgba(255,255,255,0.24)',
 
-  night: '#000000',
-  night2: '#1A1A1A',
-  night3: '#3D3D3D',
+  // The hero "vault" glass (balance, plans, rewards): a touch brighter, tinted by the aurora.
+  night: 'rgba(255,255,255,0.09)',
+  night2: 'rgba(255,255,255,0.12)',
+  night3: 'rgba(255,255,255,0.2)',
   nightText: '#FFFFFF',
-  nightMuted: '#B3B3B3',
+  nightMuted: '#BEC5D4',
 
-  primary: '#000000',
+  // Primary actions are bright liquid glass with dark text.
+  primary: '#EEF1F8',
+  onPrimary: '#0A0D16',
+
+  gold: '#8CF0D2',
+  goldDeep: '#8CF0D2',
+  goldSoft: 'rgba(140,240,210,0.14)',
+
+  green: '#7FE3A9',
+  greenSoft: 'rgba(127,227,169,0.15)',
+  red: '#FF9A9A',
+  redSoft: 'rgba(255,154,154,0.15)',
+  blue: '#9CC0FF',
+  blueSoft: 'rgba(156,192,255,0.15)',
+  amber: '#FFD68A',
+  amberSoft: 'rgba(255,214,138,0.15)',
+
+  aurora: ['#6B4DFF', '#0B8F8E', '#2D5BFF'],
+};
+
+const LIGHT: Palette = {
+  paper: '#E9EDF6',
+  paperDeep: 'rgba(14,18,32,0.06)',
+  surface: 'rgba(255,255,255,0.58)',
+  glass: 'rgba(246,248,253,0.8)',
+  sheen: 'rgba(255,255,255,0.7)',
+  ink: '#0E1220',
+  ink2: '#2E3447',
+  ink3: '#525A6E',
+  line: 'rgba(14,18,32,0.1)',
+  lineStrong: 'rgba(14,18,32,0.22)',
+
+  // In light mode the vault glass is smoked, so the balance still reads as the hero.
+  night: 'rgba(14,18,32,0.82)',
+  night2: 'rgba(255,255,255,0.12)',
+  night3: 'rgba(255,255,255,0.22)',
+  nightText: '#FFFFFF',
+  nightMuted: '#C2C8D6',
+
+  primary: '#0E1220',
   onPrimary: '#FFFFFF',
 
-  // The accent on dark surfaces (progress, rings, highlights): white.
-  gold: '#FFFFFF',
-  goldDeep: '#333333',
-  goldSoft: '#F2F2F2',
+  gold: '#8CF0D2',
+  goldDeep: '#0D6B57',
+  goldSoft: 'rgba(13,107,87,0.12)',
 
-  green: '#000000',
-  greenSoft: '#F2F2F2',
-  red: '#000000',
-  redSoft: '#EBEBEB',
-  blue: '#000000',
-  blueSoft: '#F2F2F2',
-  amber: '#333333',
-  amberSoft: '#F2F2F2',
+  green: '#1C6E45',
+  greenSoft: 'rgba(28,110,69,0.12)',
+  red: '#A8222D',
+  redSoft: 'rgba(168,34,45,0.1)',
+  blue: '#2349B0',
+  blueSoft: 'rgba(35,73,176,0.1)',
+  amber: '#7A4F00',
+  amberSoft: 'rgba(122,79,0,0.12)',
+
+  aurora: ['#B9A8FF', '#7EE0D6', '#A9C2FF'],
 };
 
-const DARK: Palette = {
-  paper: '#000000',
-  paperDeep: '#141414',
-  surface: '#0D0D0D',
-  ink: '#FFFFFF',
-  ink2: '#D9D9D9',
-  ink3: '#A6A6A6',
-  line: '#262626',
-  lineStrong: '#404040',
+/** Text and icons on the mint accent, in both modes. */
+export const ON_ACCENT = '#06130F';
 
-  night: '#1A1A1A',
-  night2: '#262626',
-  night3: '#474747',
-  nightText: '#FFFFFF',
-  nightMuted: '#B3B3B3',
-
-  primary: '#FFFFFF',
-  onPrimary: '#000000',
-
-  gold: '#FFFFFF',
-  goldDeep: '#E6E6E6',
-  goldSoft: '#1F1F1F',
-
-  green: '#FFFFFF',
-  greenSoft: '#1F1F1F',
-  red: '#FFFFFF',
-  redSoft: '#262626',
-  blue: '#FFFFFF',
-  blueSoft: '#1A1A1A',
-  amber: '#E6E6E6',
-  amberSoft: '#1F1F1F',
+/** Full-screen receipt backgrounds: deep tinted glass; white text is 7:1 or better on each. */
+export const STATUS_BG = {
+  success: '#0C3A2C',
+  pending: '#18203A',
+  on_hold: '#3A2C0E',
+  failed: '#3E1419',
+  unknown: '#18203A',
 };
+
+/** Luminous categorical series for charts (spending by category, score bands). */
+export const SERIES = ['#8CF0D2', '#9CC0FF', '#B9A2FF', '#FFD68A', '#FF9A9A'];
 
 export type Scheme = 'light' | 'dark';
-let active: Palette = LIGHT;
-let scheme: Scheme = 'light';
+let active: Palette = DARK;
+let scheme: Scheme = 'dark';
 let version = 0;
 
 /** Switch palettes. Call before rendering the tree that should use it. */
@@ -136,36 +169,40 @@ export function themed<T extends object>(factory: () => T): T {
   });
 }
 
-// Small caps throughout: Playfair Display SC for headings and big amounts, Alegreya Sans SC for everything else.
-// Both draw lowercase letters as small capitals and keep clear lining digits for money.
+// One family throughout: Pixelify Sans, a pixel face that is still easy to read at body sizes.
+// The files in assets/fonts add the ₹ sign and arrows it lacks (see scripts/build-fonts.py).
+// Weight carries the hierarchy: 700 for big amounts, 600 headings, 500 labels, 400 reading.
 export const F = {
-  display: 'PlayfairDisplaySC_400Regular',
-  displayItalic: 'PlayfairDisplaySC_400Regular_Italic',
-  regular: 'AlegreyaSansSC_400Regular',
-  medium: 'AlegreyaSansSC_500Medium',
-  semibold: 'AlegreyaSansSC_700Bold',
-  bold: 'AlegreyaSansSC_800ExtraBold',
+  display: 'PixelifySans-SemiBold',
+  displayBold: 'PixelifySans-Bold',
+  displayItalic: 'PixelifySans-Medium',
+  regular: 'PixelifySans-Regular',
+  medium: 'PixelifySans-Medium',
+  semibold: 'PixelifySans-SemiBold',
+  bold: 'PixelifySans-Bold',
+  mono: 'PixelifySans-Medium',
 };
 
-export const R = { sm: 12, md: 18, lg: 26, pill: 999 };
+// Liquid glass wants soft, generous corners.
+export const R = { sm: 14, md: 22, lg: 28, pill: 999 };
 export const GUTTER = 20;
 
-// Monogram avatars and category marks: greys only, varied by lightness so neighbours still differ.
-const TINTS_LIGHT = [
-  { bg: '#F2F2F2', fg: '#000000' },
-  { bg: '#E6E6E6', fg: '#000000' },
-  { bg: '#D9D9D9', fg: '#000000' },
-  { bg: '#000000', fg: '#FFFFFF' },
-  { bg: '#333333', fg: '#FFFFFF' },
-  { bg: '#EDEDED', fg: '#1A1A1A' },
-];
+// Monogram avatars and category marks: tinted glass tiles with luminous marks.
 const TINTS_DARK = [
-  { bg: '#1F1F1F', fg: '#FFFFFF' },
-  { bg: '#2B2B2B', fg: '#FFFFFF' },
-  { bg: '#383838', fg: '#FFFFFF' },
-  { bg: '#FFFFFF', fg: '#000000' },
-  { bg: '#D9D9D9', fg: '#000000' },
-  { bg: '#262626', fg: '#E6E6E6' },
+  { bg: 'rgba(140,240,210,0.16)', fg: '#8CF0D2' },
+  { bg: 'rgba(156,192,255,0.16)', fg: '#9CC0FF' },
+  { bg: 'rgba(185,162,255,0.18)', fg: '#C9B8FF' },
+  { bg: 'rgba(255,214,138,0.16)', fg: '#FFD68A' },
+  { bg: 'rgba(255,154,154,0.16)', fg: '#FFB0B0' },
+  { bg: 'rgba(255,255,255,0.12)', fg: '#F4F6FB' },
+];
+const TINTS_LIGHT = [
+  { bg: 'rgba(13,107,87,0.12)', fg: '#0D6B57' },
+  { bg: 'rgba(35,73,176,0.12)', fg: '#2349B0' },
+  { bg: 'rgba(98,64,214,0.12)', fg: '#5233C4' },
+  { bg: 'rgba(122,79,0,0.12)', fg: '#7A4F00' },
+  { bg: 'rgba(168,34,45,0.1)', fg: '#A8222D' },
+  { bg: 'rgba(14,18,32,0.82)', fg: '#FFFFFF' },
 ];
 
 export const tintFor = (key: string) => {

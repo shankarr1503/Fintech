@@ -7,16 +7,17 @@ import { getReceipt, Receipt } from '../../src/services/receipt';
 import { getPaymentStatus, paymentByKey } from '../../src/services/api';
 import { Coin } from '../../src/game/Coin';
 import { Amount, Button, Divider, Label, NATIVE, Small, useStatusBar } from '../../src/ui/kit';
-import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
+import { C, F, GUTTER, R, STATUS_BG, themed } from '../../src/ui/theme';
 
 // Each state gets its own colour, icon and plain-language explanation.
 const STATE = {
-  // Greys only: each state also has its own icon and title, so nothing depends on colour.
-  success: { bg: '#000000', icon: 'check', title: 'Paid' },
-  pending: { bg: '#2B2B2B', icon: 'clock', title: 'Waiting for the bank' },
-  on_hold: { bg: '#2B2B2B', icon: 'pause', title: 'On hold' },
-  failed: { bg: '#474747', icon: 'x', title: 'Payment failed' },
-  unknown: { bg: '#2B2B2B', icon: 'help-circle', title: 'Checking your payment' },
+  // Muted green, slate, ochre and brick; each state also has its own icon and title,
+  // so nothing depends on colour alone.
+  success: { bg: STATUS_BG.success, icon: 'check', title: 'Paid' },
+  pending: { bg: STATUS_BG.pending, icon: 'clock', title: 'Waiting for the bank' },
+  on_hold: { bg: STATUS_BG.on_hold, icon: 'pause', title: 'On hold' },
+  failed: { bg: STATUS_BG.failed, icon: 'x', title: 'Payment failed' },
+  unknown: { bg: STATUS_BG.unknown, icon: 'help-circle', title: 'Checking your payment' },
 } as const;
 
 const EXPLAIN: Record<string, string> = {
@@ -213,11 +214,11 @@ export default function PaymentSuccess() {
 const styles = themed(() => StyleSheet.create({
   root: { flex: 1 },
   top: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: GUTTER },
-  check: { width: 84, height: 84, borderRadius: 42, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  paid: { fontFamily: F.medium, fontSize: 16, color: '#D9D9D9' },
-  to: { fontFamily: F.semibold, fontSize: 18, color: '#FFFFFF', marginTop: 4 },
-  explain: { fontFamily: F.regular, fontSize: 14, lineHeight: 20, color: '#FFFFFF', opacity: 0.85, textAlign: 'center', marginTop: 14, maxWidth: 320 },
-  meta: { fontFamily: F.regular, fontSize: 14, color: '#D9D9D9', marginTop: 6 },
+  check: { width: 84, height: 84, borderRadius: 20, backgroundColor: '#F2F0EA', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  paid: { fontFamily: F.medium, fontSize: 15, color: '#E3E8DE', letterSpacing: 1.2, textTransform: 'uppercase' },
+  to: { fontFamily: F.semibold, fontSize: 18, color: '#F2F0EA', marginTop: 4 },
+  explain: { fontFamily: F.regular, fontSize: 14, lineHeight: 21, color: '#F2F0EA', opacity: 0.9, textAlign: 'center', marginTop: 14, maxWidth: 320 },
+  meta: { fontFamily: F.regular, fontSize: 14, color: '#E3E8DE', marginTop: 6 },
   sheet: { backgroundColor: C.paper, marginHorizontal: 12, marginBottom: 12, borderRadius: R.lg, padding: 20 },
   rewardRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14 },
   rewardTitle: { fontFamily: F.semibold, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] },

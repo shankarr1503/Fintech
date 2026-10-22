@@ -29,6 +29,7 @@
       }
       body {
         overflow: hidden;
+        background: #06080f;
         -webkit-text-size-adjust: 100%;
       }
       #root {
@@ -38,27 +39,21 @@
       }
       /* Keyboard users always see where they are; mouse and touch users don't get rings. */
       ::selection {
-        background: #000;
-        color: #fff;
+        background: #8cf0d2;
+        color: #06130f;
       }
-      /* Two-tone ring (white inside, black outside) so it shows on black and white surfaces alike. */
+      /* Two-tone ring (mint inside, near-black outside) so it shows on glass, light or dark. */
       :focus-visible {
-        outline: 2px solid #fff;
+        outline: 2px solid #8cf0d2;
         outline-offset: 1px;
-        box-shadow: 0 0 0 5px #000;
-        border-radius: 8px;
+        box-shadow: 0 0 0 5px #06080f;
+        border-radius: 12px;
       }
       /* Text fields show focus with their own thicker border instead. */
       input:focus-visible,
       textarea:focus-visible {
         outline: none;
         box-shadow: none;
-      }
-      @media (prefers-color-scheme: dark) {
-        ::selection {
-          background: #fff;
-          color: #000;
-        }
       }
       @media (prefers-reduced-motion: reduce) {
         *,
@@ -73,8 +68,8 @@
         left: 8px;
         top: -48px;
         z-index: 3000;
-        background: #000;
-        color: #fff;
+        background: #8cf0d2;
+        color: #06130f;
         padding: 10px 14px;
         border-radius: 10px;
         font: 600 15px system-ui, sans-serif;

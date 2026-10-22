@@ -12,10 +12,11 @@ import { daysUntil, formatCompact, formatDate } from '../src/utils/format';
 const MIN = 300;
 const MAX = 900;
 const BANDS = [
-  { to: 550, label: 'Needs work', color: '#4D4D4D', text: () => C.ink },
-  { to: 650, label: 'Fair', color: '#808080', text: () => C.ink },
-  { to: 750, label: 'Good', color: '#A6A6A6', text: () => C.ink },
-  { to: 900, label: 'Excellent', color: '#000000', text: () => C.ink },
+  // Brick → ochre → slate blue → green: muted, and each band is also named in words.
+  { to: 550, label: 'Needs work', color: '#A8674F', text: () => C.ink },
+  { to: 650, label: 'Fair', color: '#B39A5E', text: () => C.ink },
+  { to: 750, label: 'Good', color: '#3A5973', text: () => C.ink },
+  { to: 900, label: 'Excellent', color: '#36603F', text: () => C.ink },
 ];
 
 const FACTORS: Record<string, { label: string; good: (v: number) => boolean; show: (v: number) => string; bar: (v: number) => number; tip: string }> = {

@@ -353,7 +353,7 @@ export default function AmountScreen() {
 }
 
 const styles = themed(() => StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.paper },
+  root: { flex: 1, backgroundColor: 'transparent' },
   row: { flexDirection: 'row', alignItems: 'center' },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: GUTTER, paddingTop: 6 },
   payee: { alignItems: 'center', marginTop: 10, paddingHorizontal: GUTTER },

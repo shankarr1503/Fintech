@@ -1,31 +1,11 @@
 // CoinQuest's pixel-art coin: a grid of palette keys, '.' is transparent. Rendered by <Coin />.
-// Black and white theme: the palette is greys only.
+// A mint glass coin to match the accent: it reads on the dark aurora and on frosted light glass.
 
 export const PALETTE: Record<string, string> = {
-  k: '#000000',
-  w: '#FFFFFF',
-  y: '#E6E6E6',
-  Y: '#737373',
-  o: '#A6A6A6',
-  b: '#626262',
-  d: '#363636',
-  r: '#4E4E4E',
-  R: '#222222',
-  g: '#787878',
-  l: '#B1B1B1',
-  G: '#3F3F3F',
-  u: '#515151',
-  c: '#A5A5A5',
-  C: '#636363',
-  s: '#D2D2D2',
-  S: '#959595',
-  p: '#9C9C9C',
-  P: '#5D5D5D',
-  n: '#BCBCBC',
-  N: '#6C6C6C',
-  v: '#666666',
-  V: '#323232',
-  h: '#333333',
+  k: '#1F8A72', // rim
+  y: '#8CF0D2', // face
+  w: '#EAFFF8', // highlight
+  o: '#4FC9A9', // shade
 };
 
 export const SPRITES = {
