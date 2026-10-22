@@ -1,6 +1,6 @@
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { logoutSession, setAuthToken, setUnauthorizedHandler } from '../services/api';
+import { getAuthToken, logoutSession, setAuthToken, setUnauthorizedHandler } from '../services/api';
 import { deleteSecret, getSecret, setSecret } from '../services/secureStorage';
 
 export interface User {
@@ -39,10 +39,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await Promise.all([AsyncStorage.removeItem(USER_KEY), deleteSecret(TOKEN_KEY)]);
   }, []);
 
-  // Revoke the token server-side too; sign out locally even if the server is unreachable.
+  // Sign out locally first, so a slow or unreachable server can't keep the session on this device;
+  // then revoke the token server-side, best effort.
   const logout = useCallback(async () => {
-    await logoutSession().catch(() => {});
+    const token = getAuthToken();
     await clearSession();
+    if (token) logoutSession(token).catch(() => {});
   }, [clearSession]);
 
   useEffect(() => {
