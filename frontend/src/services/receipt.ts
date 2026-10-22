@@ -2,7 +2,8 @@ import type { Reward } from '../game/GameContext';
 
 /** The last completed payment, handed from the amount screen to the success screen. */
 export type Receipt = {
-  status: 'success' | 'pending' | 'failed' | 'on_hold';
+  /** `unknown`: the connection dropped and we couldn't yet tell whether the server received the payment. */
+  status: 'success' | 'pending' | 'failed' | 'on_hold' | 'unknown';
   reason?: string | null;
   txnId: string;
   /** Idempotency key of the attempt: resolves the transaction when the server hadn't assigned one yet. */

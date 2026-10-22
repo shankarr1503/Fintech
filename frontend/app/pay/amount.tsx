@@ -21,7 +21,21 @@ const STEP_UP_AMOUNT = 2000;
 const newKey = () => `pay-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
 
-type Account = { id: string; bank: string; account_number: string; is_primary: boolean; balance: number };
+/** Ask the server about a payment by key a few times. Null while that's still unknown: unreachable, or a 404
+ * that may come before the delayed original request, so a miss here doesn't prove nothing was sent. */
+async function lookupPayment(key: string) {
+  for (const wait of [0, 1500, 3000, 5000]) {
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+    try {
+      return await paymentByKey(key);
+    } catch {
+      // not received yet, or still offline: ask again
+    }
+  }
+  return null;
+}
+
+type Account ={ id: string; bank: string; account_number: string; is_primary: boolean; balance: number };
 
 export default function AmountScreen() {
   const router = useRouter();
@@ -116,14 +130,13 @@ export default function AmountScreen() {
         const detail = errorMessage(e);
         if (!e?.response) {
           // Timed out or connection dropped: ask the server whether it got the payment before saying anything.
-          try {
-            const known = await paymentByKey(idemKey.current);
-            // Received but not finished yet: the receipt looks the transaction up by idempotency key.
-            if (known.status === 'processing') finish({ status: 'pending', amount: value, transaction_id: '', reason: 'Waiting for the bank to confirm' });
-            else finish(known);
-          } catch {
-            Alert.alert("Payment didn't go through", "We couldn't reach CoinQuest, so nothing was sent and no money left your account. Check your connection and try again.");
-          }
+          const known = await lookupPayment(idemKey.current);
+          // Still unknown (unreachable, or not seen yet while the original request may be on its way):
+          // the receipt keeps checking by idempotency key and tells them not to pay again.
+          if (!known) finish({ status: 'unknown', amount: value, transaction_id: '' });
+          // Received but not finished yet: the receipt looks the transaction up by idempotency key.
+          else if (known.status === 'processing') finish({ status: 'pending', amount: value, transaction_id: '', reason: 'Waiting for the bank to confirm' });
+          else finish(known);
         } else if (status === 428) {
           setAskPin(true);
         } else if (status === 409 && detail.includes('a moment ago')) {
