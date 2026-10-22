@@ -80,6 +80,7 @@ async def analyze_debts(user_id: str, extra_payment: float = 0):
     total_emi = sum(d['emi_amount'] for d in debts)
     avg_interest = sum(d['interest_rate'] * d['outstanding'] for d in debts) / total_debt if total_debt > 0 else 0
     
+    extra_payment = max(0.0, min(extra_payment, 10_000_000))
     snowball = calculate_debt_payoff(debts, DebtStrategy.SNOWBALL, extra_payment)
     avalanche = calculate_debt_payoff(debts, DebtStrategy.AVALANCHE, extra_payment)
     

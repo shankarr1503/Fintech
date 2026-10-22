@@ -126,10 +126,12 @@ export default function Debts() {
           <Card dark style={{ marginTop: 14, borderRadius: R.lg, padding: 22 }}>
             <Label color={C.nightMuted}>Debt-free by</Label>
             <Display color={C.nightText} style={{ fontSize: 38, lineHeight: 42, marginTop: 6 }}>
-              {active?.debt_free_date ?? '—'}
+              {active?.debt_free_date ?? (active?.pays_off === false ? 'Not yet' : '—')}
             </Display>
             <Small color={C.nightMuted} style={{ marginTop: 4 }}>
-              {active?.total_months} months · {formatCompact(active?.total_interest ?? 0)} total interest
+              {active?.pays_off === false
+                ? 'Your payments don’t cover the interest. Pay more each month to see a date.'
+                : `${active?.total_months} months · ${formatCompact(active?.total_interest ?? 0)} total interest`}
             </Small>
             <View style={{ marginTop: 18 }}>
               <Progress value={progress} max={1} color={C.gold} track={C.night3} height={4} />

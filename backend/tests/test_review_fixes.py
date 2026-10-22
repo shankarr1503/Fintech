@@ -185,3 +185,19 @@ def test_health_check_works_over_plain_http_when_https_is_required(client, monke
     monkeypatch.setattr(settings, "require_https", True)
     assert client.get("/api/health").status_code == 200
     assert client.get("/api/app-config").status_code == 403
+
+
+def test_debt_plan_rolls_extra_over_and_admits_when_it_never_ends():
+    from app.models import DebtStrategy
+    from app.services.debt import calculate_debt_payoff
+
+    two = [
+        {"name": "small", "outstanding": 1000, "interest_rate": 0, "emi_amount": 100},
+        {"name": "big", "outstanding": 150000, "interest_rate": 0, "emi_amount": 100},
+    ]
+    plan = calculate_debt_payoff(two, DebtStrategy.SNOWBALL, extra_payment=100000)
+    assert plan["total_months"] == 2 and plan["pays_off"] is True
+
+    stuck = [{"name": "card", "outstanding": 100000, "interest_rate": 36, "emi_amount": 1000}]
+    plan = calculate_debt_payoff(stuck, DebtStrategy.AVALANCHE)
+    assert plan["pays_off"] is False and plan["debt_free_date"] is None and plan["total_months"] == 360

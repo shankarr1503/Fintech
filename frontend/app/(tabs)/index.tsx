@@ -113,7 +113,7 @@ export default function Home() {
   const d = data.dashboard;
   const spentShare = d.income > 0 ? d.spending.this_month / d.income : 0;
   const insight = (data.insights as any[])[0];
-  const debtFree = data.debts?.avalanche_analysis?.debt_free_date;
+  const debtFree = data.debts?.avalanche_analysis?.debt_free_date ?? (data.debts?.avalanche_analysis?.pays_off === false ? 'Not yet' : undefined);
   const questsLeft = profile ? profile.quests.filter((q) => !q.done).length : 0;
 
   return (

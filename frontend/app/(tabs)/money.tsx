@@ -119,7 +119,11 @@ export default function MoneyTab() {
         <Card onPress={() => go('/debts')} accessibilityLabel="Debt payoff plan">
           <View style={styles.between}>
             <View>
-              <Title>{debts.avalanche_analysis?.debt_free_date ? `Debt-free by ${debts.avalanche_analysis.debt_free_date}` : 'No debts'}</Title>
+              <Title>{debts.avalanche_analysis?.debt_free_date
+                  ? `Debt-free by ${debts.avalanche_analysis.debt_free_date}`
+                  : debts.avalanche_analysis?.pays_off === false
+                    ? 'Payments don’t cover interest'
+                    : 'No debts'}</Title>
               <Small style={{ marginTop: 2 }}>
                 {formatCompact(debts.total_debt)} left · {formatCompact(debts.total_emi)}/month in EMIs
               </Small>
