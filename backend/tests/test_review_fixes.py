@@ -68,3 +68,15 @@ def test_demo_mode_and_https_default_to_production_values(monkeypatch):
     assert config._bool("DEMO_MODE", False) is False
     src = open(config.__file__).read()
     assert '_bool("DEMO_MODE", True)' not in src
+
+
+def test_profile_never_returns_pin_or_identity_secrets(client):
+    uid, token, _ = signed_in(client)
+    for res in (client.get(f"/api/users/{uid}", headers=auth(token)),
+                client.put(f"/api/users/{uid}", json={"name": "Asha"}, headers=auth(token))):
+        assert res.status_code == 200
+        body = res.json().get("user", res.json())
+        text = json.dumps(body)
+        assert body["id"] == uid and body["pin_set"] is True
+        for secret in ("salt", "hash", "pin_attempts", "known_devices", "pan_encrypted", "dob_encrypted", "pan_hash"):
+            assert secret not in text
