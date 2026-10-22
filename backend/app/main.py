@@ -108,7 +108,9 @@ app.include_router(api)
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     """HTTPS-only in production, plus defensive headers on every response."""
-    if settings.require_https and request.url.path.startswith("/api/"):
+    # /api/health carries no data and is what the container HEALTHCHECK calls over plain HTTP
+    # inside the private network; refusing it marked every production container unhealthy.
+    if settings.require_https and request.url.path.startswith("/api/") and request.url.path != "/api/health":
         proto = request.headers.get("x-forwarded-proto", request.url.scheme)
         if proto != "https":
             return JSONResponse({"detail": "HTTPS is required"}, status_code=403)

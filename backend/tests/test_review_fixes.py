@@ -177,3 +177,11 @@ def test_otp_attempts_are_reserved_before_comparing(client):
     run(db.otp_codes.update_one({"phone": phone}, {"$set": {"attempts": 5}}))
     res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10", "confirm_age": True})
     assert res.status_code == 400 and "Too many" in res.json()["detail"]
+
+
+def test_health_check_works_over_plain_http_when_https_is_required(client, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "require_https", True)
+    assert client.get("/api/health").status_code == 200
+    assert client.get("/api/app-config").status_code == 403
