@@ -228,9 +228,12 @@ async def require_user(request: Request) -> str:
     user_id = session["user_id"]
 
     claimed = [request.path_params.get("user_id"), request.query_params.get("user_id")]
-    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
-        # Inspect any body that parses as JSON, whatever the Content-Type says: FastAPI reads
-        # `application/JSON` or `+json` bodies too, so a header-based check can be sidestepped.
+    content_type = request.headers.get("content-type", "").lower()
+    is_form = content_type.startswith(("multipart/", "application/x-www-form-urlencoded"))
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and not is_form:
+        # Inspect any other body that parses as JSON, whatever the Content-Type says: FastAPI
+        # reads `application/JSON` or `+json` bodies too, so a header-based check can be sidestepped.
+        # (Form uploads are parsed as forms, never as JSON, and their stream is already consumed.)
         raw = await request.body()  # Starlette caches the body for the route
         try:
             body = json.loads(raw) if raw else None

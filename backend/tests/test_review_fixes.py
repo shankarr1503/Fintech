@@ -210,3 +210,22 @@ def test_loans_are_bounded_by_eligibility_and_reject_nan(client):
     for amount in (1e15, "NaN", "inf"):
         assert client.post("/api/loans/apply", json={**base, "amount": amount}, headers=h).status_code == 400
     assert client.post("/api/loans/quote", json={**base, "amount": 150000}, headers=h).status_code == 200
+
+
+def test_model_insights_are_cleaned_before_use():
+    from app.services.ai import clean_insight
+
+    assert clean_insight({"description": "no title"}) is None
+    assert clean_insight("text") is None
+    cleaned = clean_insight({"title": "Cut takeout", "description": "Save ₹2,000", "category": "x", "impact_amount": float("nan"), "user_id": "victim"})
+    assert cleaned == {"title": "Cut takeout", "description": "Save ₹2,000", "category": "spending", "impact_amount": None}
+
+
+def test_csv_import_has_a_row_cap(client, monkeypatch):
+    from app.routers import transactions
+
+    uid, token, _ = signed_in(client)
+    monkeypatch.setattr(transactions, "MAX_CSV_ROWS", 3)
+    rows = "date,amount,merchant\n" + "2026-10-01,100,Shop\n" * 4
+    res = client.post(f"/api/transactions/upload-csv/{uid}", files={"file": ("s.csv", rows, "text/csv")}, headers=auth(token))
+    assert res.status_code == 400 and "at most 3" in res.json()["detail"]
