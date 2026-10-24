@@ -9,7 +9,7 @@
 
 Good money habits earn coins, XP, streaks and badges.
 
-The look is dark glassmorphism: frosted glass surfaces over a soft aurora, with Pixelify Sans throughout (a ₹ sign was drawn for it) and a single mint accent. A frosted light mode is one tap away. The design benchmarks Google Pay, PhonePe, Paytm, CRED, 1% Club and the Safyre wallet concept. [docs/design/DESIGN.md](docs/design/DESIGN.md) covers what we took from each app, the design principles and the tokens. [docs/COMPLIANCE.md](docs/COMPLIANCE.md) covers security, compliance and reliability: what's done, what needs infrastructure, and what needs legal or business work.
+The look is dark glassmorphism lit like a real scene: frosted glass under one warm key light, a 3D voxel copper coin you can spin, cards that tilt with your phone, and keycap buttons, all in Pixelify Sans (a ₹ sign was drawn for it). A frosted light mode is one tap away. The design benchmarks Google Pay, PhonePe, Paytm, CRED, 1% Club and the Safyre wallet concept. [docs/design/DESIGN.md](docs/design/DESIGN.md) covers what we took from each app, the design principles and the tokens. [docs/COMPLIANCE.md](docs/COMPLIANCE.md) covers security, compliance and reliability: what's done, what needs infrastructure, and what needs legal or business work.
 
 | Sign in | Home | Pay | Paid |
 |---|---|---|---|

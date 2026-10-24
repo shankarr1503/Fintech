@@ -23,12 +23,24 @@
 
 The look is dark glassmorphism ("liquid glass"): frosted surfaces floating over one aurora. Glass goes wrong when it costs legibility or hides state, so it follows rules:
 
-- **One backdrop, rendered once.** `Backdrop` (kit.tsx) paints three soft light pools on near-black behind the navigator. Screens and navigators are transparent; nothing paints its own gradient. Transitions fade, so two transparent screens never overlap mid-slide.
+- **One backdrop, rendered once.** `Backdrop` (kit.tsx) paints the lit scene behind the navigator: a warm copper key light from the top left, a verdigris bounce from the bottom right and a vignette into the floor. Screens and navigators are transparent; nothing paints its own gradient. Transitions fade, so two transparent screens never overlap mid-slide.
 - **Glass is a fill, not a filter on text.** `Glass` adds the backdrop blur (expo-blur on iOS and web; Android gets the translucent tint, because its blur is experimental and costly), the tint and a sheen across the top edge. Text always sits on top of it, never inside a blur.
-- **Contrast is checked against the brightest spot.** Every text colour meets WCAG AA (4.5:1) over the brightest aurora pool seen through glass, not just over the base colour. The lowest pair is 5.3:1.
+- **Contrast is checked against the brightest spot.** Every text colour meets WCAG AA (4.5:1) over the brightest part of the key light seen through glass, not just over the base colour. The lowest pair is 4.6:1.
 - **Some surfaces must not be glass.** The app lock is opaque (it exists to hide the app). The reward toast and payment receipts use fixed smoked or deep tints so they stay readable over anything.
 - **States never rely on colour.** Paid, waiting, held and failed each have their own icon and title as well as their tint.
 - **Pixel type, one family.** Pixelify Sans everywhere. Weight carries the hierarchy (700 amounts, 600 headings, 500 labels, 400 reading), sizes sit a step below the usual scale because pixel letters run wide, and line heights are generous.
+
+## 3D, and not looking machine-made
+
+Generated interfaces share tells: purple-to-blue gradients, glowing orbs with no light source, sparkles, stock 3D blobs, every block the same card. CoinQuest's depth comes from one physical idea instead: **a copper coin on a desk, lit by one lamp.**
+
+- **One light, everywhere.** The key light sits up and to the left (`KEY_LIGHT` in `src/ui/three/voxel.ts`). The backdrop's warm pool, the voxel shading, the shadow falling down and to the right, the glare on tilting cards and the bright top edge of every keycap all come from that direction. Nothing glows on its own.
+- **Materials, not gradients.** Copper for the coin, and verdigris (copper's own patina) for the mint accent and the backdrop's bounce light. The palette has a reason.
+- **Our own 3D objects, in our own pixels.** `meshFromSprite` extrudes pixel art into voxels: the coin (13×13, with an embossed ₹ that stands off the face) and the padlock on the lock screen. Each is a sprite you can read in `src/ui/three/models.ts`. They're drawn with react-native-svg (painter's order, back faces culled), so there's no three.js and no GL context, and they run in Expo Go, on web and on native.
+- **3D only where it means something.** The coin appears where coins are: sign-in (the brand), Rewards (big; drag to spin it) and the receipt (a small coin lands when you earn some). The padlock is on the lock screen. Money screens stay flat and still.
+- **Physical, small movements.** The balance and debt-plan cards tilt up to 6° with the phone (DeviceMotion, re-centred to your grip) or the pointer on web, with a glare from the key light. Quick actions and PIN digits are keycaps that travel down when pressed. Function keys stay flat, so digits stand out.
+- **Restraint.** No confetti, sparkles or particles. Models pause when their screen isn't in front. With Reduce Motion on, coins hold a still three-quarter view and cards don't tilt.
+- **Uneven on purpose.** The sign-in coin sits off-centre by the headline; the Rewards coin sits beside the number rather than above it.
 
 ## Tokens
 
@@ -47,7 +59,8 @@ Dark is the default; a frosted light variant swaps the same tokens (light glass 
 | `primary` / `onPrimary` | `#EEF1F8` / `#0A0D16` | Bright liquid primary buttons |
 | `gold` | `#8CF0D2` | The mint accent: progress, rings, rewards, Scan. Text on it is `ON_ACCENT` |
 | `green` / `red` / `blue` / `amber` | luminous tints, each with a 15% "soft" fill | Money in / problems / links / warnings |
-| `aurora` | `#6B4DFF`, `#0B8F8E`, `#2D5BFF` | The backdrop's light pools (30% at the centre) |
+| `aurora` | `#C27A3A`, `#1F7A68`, `#000000` | Key light (copper), bounce (verdigris), floor vignette |
+| `keyCap` / `keySide` | `#1B202C` / `#090C13` | Keycap face and the side showing below it |
 
 Payment receipts sit on deep tints with white text (7:1 or better): Paid `#0C3A2C`, Waiting `#18203A`, On hold `#3A2C0E`, Failed `#3E1419`, each with its own icon (tick, clock, pause, cross) and title.
 
