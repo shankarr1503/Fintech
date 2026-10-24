@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { C, F, themed } from './theme';
-import { haptic, NATIVE } from './kit';
+import { haptic, Keycap, NATIVE } from './kit';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'bio', '0', 'del'];
 
@@ -76,18 +76,21 @@ export function PinPad({ title, subtitle, error, busy, onSubmit, onBiometric, da
             <Pressable
               key={k}
               onPress={() => press(k)}
-              style={({ pressed }) => [styles.key, pressed && { backgroundColor: dark ? C.night2 : C.paperDeep }]}
+              style={styles.key}
               accessibilityRole="button"
               accessibilityLabel={k === 'del' ? 'Delete' : k === 'bio' ? 'Use biometrics' : k}
               testID={`pin-${k}`}
             >
-              {k === 'del' ? (
-                <Feather name="delete" size={22} color={fg} />
-              ) : k === 'bio' ? (
-                <Feather name="smartphone" size={22} color={fg} />
-              ) : (
-                <Text style={[styles.keyText, { color: fg }]}>{k}</Text>
-              )}
+              {({ pressed }) =>
+                k === 'del' || k === 'bio' ? (
+                  // Function keys stay flat: only digits are keycaps, so the eye finds them first.
+                  <Feather name={k === 'del' ? 'delete' : 'smartphone'} size={22} color={fg} style={{ opacity: pressed ? 0.5 : 1 }} />
+                ) : (
+                  <Keycap width={80} height={54} radius={16} depth={4} pressed={pressed}>
+                    <Text style={[styles.keyText, { color: C.ink }]}>{k}</Text>
+                  </Keycap>
+                )
+              }
             </Pressable>
           );
         })}
@@ -109,7 +112,7 @@ const styles = themed(() =>
     dot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1.5 },
     error: { fontFamily: F.medium, fontSize: 13, textAlign: 'center' },
     pad: { flexDirection: 'row', flexWrap: 'wrap', width: 288, marginTop: 10 },
-    key: { width: 96, height: 66, alignItems: 'center', justifyContent: 'center', borderRadius: 33 },
-    keyText: { fontFamily: F.medium, fontSize: 28, fontVariant: ['tabular-nums'] },
+    key: { width: 96, height: 68, alignItems: 'center', justifyContent: 'center' },
+    keyText: { fontFamily: F.semibold, fontSize: 26, fontVariant: ['tabular-nums'] },
   }),
 );

@@ -36,6 +36,7 @@ import {
   useStatusBar,
 } from '../../src/ui/kit';
 import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
+import { Tilt } from '../../src/ui/three/Tilt';
 import { daysUntil, formatCompact } from '../../src/utils/format';
 
 const SERVICES: { label: string; icon: IconName; route: string }[] = [
@@ -156,6 +157,8 @@ export default function Home() {
         )}
 
         {/* Hero: money left this month */}
+        {/* The balance is a physical card: it tilts with the phone, lit from the top left. */}
+        <Tilt radius={R.lg}>
         <Card dark style={styles.hero} onPress={() => go('/expenses')} accessibilityLabel="Spending this month" testID="hero">
           <View style={styles.between}>
             <Label color={C.nightMuted}>Left this month</Label>
@@ -182,6 +185,7 @@ export default function Home() {
             </Small>
           </View>
         </Card>
+        </Tilt>
 
         {/* The four jobs */}
         <View style={styles.actions}>

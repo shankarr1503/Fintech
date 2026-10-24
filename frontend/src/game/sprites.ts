@@ -1,11 +1,11 @@
 // CoinQuest's pixel-art coin: a grid of palette keys, '.' is transparent. Rendered by <Coin />.
-// A mint glass coin to match the accent: it reads on the dark aurora and on frosted light glass.
+// Copper, matching the 3D coin (src/ui/three/models.ts): the small flat coin is its icon.
 
 export const PALETTE: Record<string, string> = {
-  k: '#1F8A72', // rim
-  y: '#8CF0D2', // face
-  w: '#EAFFF8', // highlight
-  o: '#4FC9A9', // shade
+  k: '#8A5426', // rim
+  y: '#D89A57', // face
+  w: '#F2C58C', // lit edge (the key light is top left)
+  o: '#B5773D', // shaded edge
 };
 
 export const SPRITES = {

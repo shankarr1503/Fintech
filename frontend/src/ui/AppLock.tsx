@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { errorMessage, verifyPin } from '../services/api';
 import { Coin } from '../game/Coin';
 import { Backdrop } from './kit';
+import { VoxelPadlock } from './three/Voxel';
 import { PinPad } from './PinPad';
 import { C, F, themed } from './theme';
 
@@ -84,9 +85,10 @@ export function AppLock() {
     <View style={styles.root} accessibilityViewIsModal testID="app-lock">
       <Backdrop />
       <View style={styles.brand}>
-        <Coin size={22} />
+        <Coin size={18} />
         <Text style={styles.brandText}>CoinQuest is locked</Text>
       </View>
+      <VoxelPadlock size={88} spin={0} rest={{ yaw: -0.45, pitch: 0.2 }} />
       <PinPad dark title="Enter your PIN" error={error} busy={busy} onSubmit={submit} onBiometric={bio ? tryBiometric : undefined} />
       <Pressable onPress={logout} accessibilityRole="button" style={styles.logout} hitSlop={12}>
         <Text style={styles.logoutText}>Not you? Log out</Text>

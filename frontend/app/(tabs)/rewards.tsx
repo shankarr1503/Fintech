@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { errorMessage, getRewards, redeemReward } from '../../src/services/api';
 import { useGame } from '../../src/game/GameContext';
 import { Coin } from '../../src/game/Coin';
+import { VoxelCoin } from '../../src/ui/three/Voxel';
 import { useUserData } from '../../src/game/useData';
 import { Alert } from '../../src/ui/dialog';
 import { Body, Button, Divider, ErrorState, Heading, IconName, Label, Ring, Screen, Section, Sheet, SkeletonScreen, Small, Strong } from '../../src/ui/kit';
@@ -69,10 +70,13 @@ export default function RewardsTab() {
     <Screen title="Rewards" back={false} dark refreshing={refreshing} onRefresh={refresh}>
       {/* Balance */}
       <View style={styles.balance}>
-        <Coin size={34} />
-        <Text style={styles.coins} testID="coin-balance">
-          {coins.toLocaleString('en-IN')}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.coins} testID="coin-balance">
+            {coins.toLocaleString('en-IN')}
+          </Text>
+        </View>
+        {/* The one object you can pick up: drag to spin it. */}
+        <VoxelCoin size={112} spin={0.5} interactive accessibilityLabel={`${coins} coins`} />
       </View>
       <Small color={C.nightMuted}>coins · worth ₹{(coins * coinValue).toLocaleString('en-IN', { maximumFractionDigits: 2 })} in vouchers · {data.rewards.tier} member</Small>
 
@@ -229,8 +233,8 @@ export default function RewardsTab() {
 
 const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
-  balance: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
-  coins: { fontFamily: F.display, fontSize: 56, color: C.nightText, marginLeft: 12, letterSpacing: -1, fontVariant: ['tabular-nums'] },
+  balance: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  coins: { fontFamily: F.displayBold, fontSize: 56, color: C.nightText, letterSpacing: -1, fontVariant: ['tabular-nums'] },
   panel: { backgroundColor: C.night2, borderRadius: R.md, padding: 16 },
   levelNum: { fontFamily: F.display, fontSize: 34, color: C.nightText },
   week: { flexDirection: 'row', gap: 6, marginTop: 10 },

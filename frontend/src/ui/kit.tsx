@@ -181,7 +181,7 @@ export function Glass({ vault, strong, radius }: { vault?: boolean; strong?: boo
       {BLUR_OK && <BlurView intensity={strong ? 60 : 40} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />}
       {vault && (
         <LinearGradient
-          colors={dark ? ['rgba(107,77,255,0.28)', 'rgba(11,143,142,0.16)'] : ['rgba(14,18,32,0.9)', 'rgba(24,30,52,0.86)']}
+          colors={dark ? ['rgba(194,122,58,0.24)', 'rgba(31,122,104,0.12)'] : ['rgba(22,20,18,0.9)', 'rgba(30,38,36,0.86)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
@@ -196,28 +196,35 @@ export function Glass({ vault, strong, radius }: { vault?: boolean; strong?: boo
 const BLUR_OK = Platform.OS === 'ios' || Platform.OS === 'web';
 
 /**
- * The aurora every glass surface floats on: three soft light pools on the base colour.
- * Rendered once, behind the navigator (see app/_layout.tsx).
+ * The scene every glass surface sits in: one warm key light up and to the left, a cool bounce
+ * down and to the right, and a vignette that falls off into the floor. One light source, like a
+ * photographed object, rather than decorative glows. Rendered once, behind the navigator.
  */
 export function Backdrop() {
-  const [a, b, c] = C.aurora;
+  const [key, bounce, floor] = C.aurora;
   const dark = getScheme() === 'dark';
   const o = dark ? 0.3 : 0.6;
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: C.paper }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden>
       <Svg width="100%" height="100%" preserveAspectRatio="xMidYMid slice" viewBox="0 0 400 860">
         <Defs>
-          {[a, b, c].map((col, i) => (
-            <RadialGradient key={i} id={`orb${i}`} cx="50%" cy="50%" r="50%">
-              <Stop offset="0" stopColor={col} stopOpacity={o} />
-              <Stop offset="0.55" stopColor={col} stopOpacity={o * 0.35} />
-              <Stop offset="1" stopColor={col} stopOpacity={0} />
-            </RadialGradient>
-          ))}
+          <RadialGradient id="key" cx="50%" cy="50%" r="50%">
+            <Stop offset="0" stopColor={key} stopOpacity={o} />
+            <Stop offset="0.5" stopColor={key} stopOpacity={o * 0.4} />
+            <Stop offset="1" stopColor={key} stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="bounce" cx="50%" cy="50%" r="50%">
+            <Stop offset="0" stopColor={bounce} stopOpacity={o * 0.75} />
+            <Stop offset="1" stopColor={bounce} stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="vignette" cx="38%" cy="30%" r="85%">
+            <Stop offset="0.45" stopColor={floor} stopOpacity={0} />
+            <Stop offset="1" stopColor={floor} stopOpacity={dark ? 0.7 : 0.18} />
+          </RadialGradient>
         </Defs>
-        <Rect x={-140} y={-160} width={520} height={520} fill="url(#orb0)" />
-        <Rect x={150} y={250} width={440} height={440} fill="url(#orb1)" />
-        <Rect x={-200} y={520} width={520} height={520} fill="url(#orb2)" />
+        <Rect x={-260} y={-300} width={720} height={720} fill="url(#key)" />
+        <Rect x={170} y={520} width={460} height={460} fill="url(#bounce)" />
+        <Rect x={0} y={0} width={400} height={860} fill="url(#vignette)" />
       </Svg>
     </View>
   );
@@ -346,6 +353,55 @@ export function IconButton({
 }
 
 /** Round icon tile with a label underneath (quick actions, services). */
+/**
+ * A pixel-game keycap: a cap that sits `depth` above its side and travels down when pressed, so
+ * the most-used actions feel like physical buttons. The cap is opaque (a glass cap would show its
+ * own side through it) and lit from the top left: a bright top edge, the side showing below.
+ */
+export function Keycap({
+  width,
+  height,
+  radius = 18,
+  depth = 5,
+  tone = 'plain',
+  pressed,
+  children,
+}: {
+  width: number;
+  height: number;
+  radius?: number;
+  depth?: number;
+  tone?: 'plain' | 'primary' | 'accent';
+  pressed: boolean;
+  children: ReactNode;
+}) {
+  const cap = tone === 'primary' ? C.primary : tone === 'accent' ? C.gold : C.keyCap;
+  const side = tone === 'primary' ? (getScheme() === 'dark' ? '#9AA3B5' : '#000000') : tone === 'accent' ? '#2E9C7E' : C.keySide;
+  const travel = pressed ? depth - 1 : 0;
+  return (
+    <View style={{ width, height: height + depth }}>
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height, borderRadius: radius, backgroundColor: side }} />
+      <View
+        style={{
+          width,
+          height,
+          borderRadius: radius,
+          backgroundColor: cap,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderTopWidth: 1,
+          borderLeftWidth: 1,
+          borderTopColor: 'rgba(255,255,255,0.22)',
+          borderLeftColor: 'rgba(255,255,255,0.1)',
+          transform: [{ translateY: travel }],
+        }}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
 export function ActionTile({
   icon,
   label,
@@ -359,7 +415,6 @@ export function ActionTile({
   tone?: 'light' | 'dark' | 'gold';
   testID?: string;
 }) {
-  const bg = tone === 'dark' ? C.primary : tone === 'gold' ? C.gold : C.surface;
   const fg = tone === 'dark' ? C.onPrimary : tone === 'gold' ? ON_ACCENT : C.ink;
   return (
     <Pressable
@@ -370,15 +425,18 @@ export function ActionTile({
       }}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [{ alignItems: 'center', width: 76 }, pressed && { transform: [{ scale: 0.95 }] }]}
+      style={{ alignItems: 'center', width: 76 }}
     >
-      <View style={[s.tile, { backgroundColor: bg }, tone === 'light' ? { borderWidth: 1, borderColor: C.line, overflow: 'hidden' } : s.glow, tone === 'gold' && { shadowColor: C.gold }]}>
-        {tone === 'light' && <Glass />}
-        <Feather name={icon} size={22} color={fg} />
-      </View>
-      <Text numberOfLines={2} style={s.tileLabel}>
-        {label}
-      </Text>
+      {({ pressed }) => (
+        <>
+          <Keycap width={60} height={58} radius={18} tone={tone === 'dark' ? 'primary' : tone === 'gold' ? 'accent' : 'plain'} pressed={pressed}>
+            <Feather name={icon} size={22} color={fg} />
+          </Keycap>
+          <Text numberOfLines={2} style={s.tileLabel}>
+            {label}
+          </Text>
+        </>
+      )}
     </Pressable>
   );
 }
@@ -713,9 +771,10 @@ type ScreenProps = {
 export function Screen({ title, kicker, back = true, right, children, dark, scroll = true, refreshing, onRefresh, footer, contentStyle }: ScreenProps) {
   const router = useRouter();
   useStatusBar(dark ? 'light' : 'dark');
-  // Screens are transparent: every one floats on the shared aurora Backdrop.
+  // Screens are transparent and float on the shared Backdrop. A `dark` screen (Rewards) sets its
+  // text light-on-dark, so it paints the vault surface: a faint lift in dark mode, smoked in light.
   return (
-    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+    <View style={{ flex: 1, backgroundColor: dark ? C.night : 'transparent' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {(back || right) && (
           <View style={s.topBar}>

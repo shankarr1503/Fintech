@@ -1,7 +1,8 @@
 // CoinQuest design tokens. See docs/design/DESIGN.md for the reasoning.
 //
-// Dark glassmorphism ("liquid glass"): every surface is frosted glass floating over one
-// aurora backdrop (see Backdrop in kit.tsx). Surfaces are translucent fills with a hairline
+// Dark glassmorphism ("liquid glass"): every surface is frosted glass in one lit scene (see
+// Backdrop in kit.tsx): a warm copper key light from the top left, a verdigris bounce from the
+// bottom right. Voxel shading, card glare and keycap edges all use that same light. Surfaces are translucent fills with a hairline
 // light border; one mint accent for progress and rewards; states are luminous tints that
 // always also carry an icon and a word, so meaning never relies on colour alone.
 // `C` always points at the active palette; styles built with `themed()` follow it.
@@ -38,8 +39,11 @@ type Palette = {
   blueSoft: string;
   amber: string;
   amberSoft: string;
-  /** Aurora light pools behind the glass. */
+  /** The backdrop's lights: warm key (top left), cool bounce (bottom right), and the floor. */
   aurora: [string, string, string];
+  /** Keycaps: the cap's face and its side, lit from the top left like everything else. */
+  keyCap: string;
+  keySide: string;
 };
 
 // Text contrast is checked against the darkest and lightest the backdrop gets under glass;
@@ -80,11 +84,14 @@ const DARK: Palette = {
   amber: '#FFD68A',
   amberSoft: 'rgba(255,214,138,0.15)',
 
-  aurora: ['#6B4DFF', '#0B8F8E', '#2D5BFF'],
+  // Copper key light and its verdigris patina: the coin's own materials, not a stock gradient.
+  aurora: ['#C27A3A', '#1F7A68', '#000000'],
+  keyCap: '#1B202C',
+  keySide: '#090C13',
 };
 
 const LIGHT: Palette = {
-  paper: '#E9EDF6',
+  paper: '#EEEBE6',
   paperDeep: 'rgba(14,18,32,0.06)',
   surface: 'rgba(255,255,255,0.58)',
   glass: 'rgba(246,248,253,0.8)',
@@ -118,7 +125,9 @@ const LIGHT: Palette = {
   amber: '#7A4F00',
   amberSoft: 'rgba(122,79,0,0.12)',
 
-  aurora: ['#B9A8FF', '#7EE0D6', '#A9C2FF'],
+  aurora: ['#F3C698', '#A9E3D3', '#8A7F72'],
+  keyCap: '#FBFCFE',
+  keySide: '#C3CAD8',
 };
 
 /** Text and icons on the mint accent, in both modes. */

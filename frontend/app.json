@@ -53,6 +53,12 @@
       ],
       "expo-font",
       [
+        "expo-sensors",
+        {
+          "motionPermission": "CoinQuest uses motion only to tilt cards slightly as you move your phone. Nothing is recorded."
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "CoinQuest uses the camera only to scan UPI payment QR codes.",

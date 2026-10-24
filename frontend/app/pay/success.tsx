@@ -5,7 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getReceipt, Receipt } from '../../src/services/receipt';
 import { getPaymentStatus, paymentByKey } from '../../src/services/api';
-import { Coin } from '../../src/game/Coin';
+import { VoxelCoin } from '../../src/ui/three/Voxel';
 import { Amount, Button, Divider, Label, NATIVE, Small, useStatusBar } from '../../src/ui/kit';
 import { C, F, GUTTER, R, STATUS_BG, themed } from '../../src/ui/theme';
 
@@ -152,7 +152,7 @@ export default function PaymentSuccess() {
           {ok && (totalCoins > 0 || quests.length || badges.length) ? (
             <>
               <View style={styles.rewardRow}>
-                <Coin size={26} />
+                <VoxelCoin size={44} spin={0} flipIn accessibilityLabel="Coins earned" />
                 <View style={{ marginLeft: 12, flex: 1 }}>
                   <Text style={styles.rewardTitle}>
                     +{totalCoins} coins{reward?.xp_earned ? `  ·  +${reward.xp_earned} XP` : ''}

@@ -6,6 +6,7 @@ import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
 import { Amount, Body, Button, Card, Chip, Display, Divider, Empty, ErrorState, Field, IconButton, Label, Pill, Progress, Screen, Section, Segmented, Sheet, SkeletonScreen, Small, Strong } from '../src/ui/kit';
 import { C, R, themed } from '../src/ui/theme';
+import { Tilt } from '../src/ui/three/Tilt';
 import { formatCompact, parseAmount } from '../src/utils/format';
 
 type Debt = { id: string; name: string; type: string; principal: number; outstanding: number; interest_rate: number; emi_amount: number; remaining_tenure: number };
@@ -123,24 +124,26 @@ export default function Debts() {
         <Empty icon="check-circle" title="You owe nothing" body="Add a card or loan to plan your payoff." action={<Button label="Add a debt" small onPress={() => setAdding(true)} />} />
       ) : (
         <>
-          <Card dark style={{ marginTop: 14, borderRadius: R.lg, padding: 22 }}>
-            <Label color={C.nightMuted}>Debt-free by</Label>
-            <Display color={C.nightText} style={{ fontSize: 38, lineHeight: 42, marginTop: 6 }}>
-              {active?.debt_free_date ?? (active?.pays_off === false ? 'Not yet' : '—')}
-            </Display>
-            <Small color={C.nightMuted} style={{ marginTop: 4 }}>
-              {active?.pays_off === false
-                ? 'Your payments don’t cover the interest. Pay more each month to see a date.'
-                : `${active?.total_months} months · ${formatCompact(active?.total_interest ?? 0)} total interest`}
-            </Small>
-            <View style={{ marginTop: 18 }}>
-              <Progress value={progress} max={1} color={C.gold} track={C.night3} height={4} />
-            </View>
-            <View style={[styles.between, { marginTop: 10 }]}>
-              <Small color={C.nightMuted}>{formatCompact(analysis.total_debt)} left</Small>
-              <Small color={C.nightMuted}>{formatCompact(analysis.total_emi)}/mo</Small>
-            </View>
-          </Card>
+          <Tilt radius={R.lg} style={{ marginTop: 14 }}>
+            <Card dark style={{ borderRadius: R.lg, padding: 22 }}>
+              <Label color={C.nightMuted}>Debt-free by</Label>
+              <Display color={C.nightText} style={{ fontSize: 38, lineHeight: 42, marginTop: 6 }}>
+                {active?.debt_free_date ?? (active?.pays_off === false ? 'Not yet' : '—')}
+              </Display>
+              <Small color={C.nightMuted} style={{ marginTop: 4 }}>
+                {active?.pays_off === false
+                  ? 'Your payments don’t cover the interest. Pay more each month to see a date.'
+                  : `${active?.total_months} months · ${formatCompact(active?.total_interest ?? 0)} total interest`}
+              </Small>
+              <View style={{ marginTop: 18 }}>
+                <Progress value={progress} max={1} color={C.gold} track={C.night3} height={4} />
+              </View>
+              <View style={[styles.between, { marginTop: 10 }]}>
+                <Small color={C.nightMuted}>{formatCompact(analysis.total_debt)} left</Small>
+                <Small color={C.nightMuted}>{formatCompact(analysis.total_emi)}/mo</Small>
+              </View>
+            </Card>
+          </Tilt>
 
           <Section title="Your plan">
             <Segmented
