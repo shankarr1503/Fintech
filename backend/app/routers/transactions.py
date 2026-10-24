@@ -1,6 +1,7 @@
 import csv
 import io
 import logging
+import math
 import re
 import uuid
 from datetime import datetime
@@ -13,7 +14,7 @@ from ..config import settings
 from ..db import db
 from ..models import Transaction, TransactionCategory, TransactionCreate
 from ..services import game
-from ..services.ai import categorize_transaction_ai
+from ..services.ai import categorize_by_keywords, categorize_transaction_ai
 from ..services.sample_data import generate_sample_data
 from ..utils import serialize_doc
 
@@ -45,6 +46,10 @@ async def create_transaction(transaction: TransactionCreate):
     await db.transactions.insert_one(trans_obj.model_dump())
     return trans_obj
 
+MAX_CSV_ROWS = 2000
+MAX_AI_CATEGORIZED_ROWS = 50
+
+
 @router.post("/transactions/upload-csv/{user_id}")
 async def upload_csv(user_id: str, file: UploadFile = File(...)):
     """Upload CSV bank statement"""
@@ -54,7 +59,10 @@ async def upload_csv(user_id: str, file: UploadFile = File(...)):
         reader = csv.DictReader(io.StringIO(decoded))
         
         transactions = []
-        for row in reader:
+        categorized = 0
+        for n, row in enumerate(reader):
+            if n >= MAX_CSV_ROWS:
+                raise HTTPException(status_code=400, detail=f"Statements can have at most {MAX_CSV_ROWS:,} rows. Split the file and upload each part.")
             # Expected columns: date, amount, type, merchant/description
             date_str = row.get('date') or row.get('Date') or row.get('Transaction Date')
             amount = float(row.get('amount') or row.get('Amount') or row.get('Debit') or row.get('Credit') or 0)
@@ -70,7 +78,14 @@ async def upload_csv(user_id: str, file: UploadFile = File(...)):
                 except (ValueError, TypeError):
                     date = datetime.utcnow()
             
-            category = await categorize_transaction_ai(merchant)
+            # The model is paid per call: use it for the first rows, keyword rules for the rest.
+            if categorized < MAX_AI_CATEGORIZED_ROWS:
+                category = await categorize_transaction_ai(merchant)
+                categorized += 1
+            else:
+                category = categorize_by_keywords(merchant)
+            if not math.isfinite(amount):
+                raise ValueError(f"row {n + 2}: amount is not a number")
             
             transactions.append({
                 "id": str(uuid.uuid4()),
@@ -90,6 +105,8 @@ async def upload_csv(user_id: str, file: UploadFile = File(...)):
             await db.transactions.insert_many(transactions)
         
         return {"message": f"Imported {len(transactions)} transactions", "count": len(transactions)}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse CSV: {str(e)}")
 

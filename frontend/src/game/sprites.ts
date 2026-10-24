@@ -1,31 +1,11 @@
 // CoinQuest's pixel-art coin: a grid of palette keys, '.' is transparent. Rendered by <Coin />.
-// Black and white theme: the palette is greys only.
+// Copper, matching the 3D coin (src/ui/three/models.ts): the small flat coin is its icon.
 
 export const PALETTE: Record<string, string> = {
-  k: '#000000',
-  w: '#FFFFFF',
-  y: '#E6E6E6',
-  Y: '#737373',
-  o: '#A6A6A6',
-  b: '#626262',
-  d: '#363636',
-  r: '#4E4E4E',
-  R: '#222222',
-  g: '#787878',
-  l: '#B1B1B1',
-  G: '#3F3F3F',
-  u: '#515151',
-  c: '#A5A5A5',
-  C: '#636363',
-  s: '#D2D2D2',
-  S: '#959595',
-  p: '#9C9C9C',
-  P: '#5D5D5D',
-  n: '#BCBCBC',
-  N: '#6C6C6C',
-  v: '#666666',
-  V: '#323232',
-  h: '#333333',
+  k: '#8A5426', // rim
+  y: '#D89A57', // face
+  w: '#F2C58C', // lit edge (the key light is top left)
+  o: '#B5773D', // shaded edge
 };
 
 export const SPRITES = {

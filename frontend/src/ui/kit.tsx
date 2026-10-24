@@ -18,12 +18,14 @@ import {
   ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { setStatusBarStyle } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
-import Svg, { Circle } from 'react-native-svg';
-import { C, F, getScheme, GUTTER, R, tintFor, themed } from './theme';
+import Svg, { Circle, Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { C, F, getScheme, GUTTER, ON_ACCENT, R, tintFor, themed } from './theme';
 
 export const NATIVE = Platform.OS !== 'web';
 
@@ -75,14 +77,15 @@ function make(base: () => TextStyle, displayName: string) {
   return Styled;
 }
 
-// Text styles. With small-caps faces, lowercase letters are short, so sizes run a little larger than usual.
-export const Display = make(() => ({ fontFamily: F.display, fontSize: 40, lineHeight: 44, color: C.ink, letterSpacing: -0.5 }), 'Display');
-export const Heading = make(() => ({ fontFamily: F.display, fontSize: 30, lineHeight: 34, color: C.ink, letterSpacing: -0.3 }), 'Heading');
-export const Title = make(() => ({ fontFamily: F.semibold, fontSize: 18, lineHeight: 23, color: C.ink }), 'Title');
-export const Body = make(() => ({ fontFamily: F.regular, fontSize: 16, lineHeight: 23, color: C.ink2 }), 'Body');
-export const Small = make(() => ({ fontFamily: F.regular, fontSize: 14, lineHeight: 19, color: C.ink3 }), 'Small');
-export const Strong = make(() => ({ fontFamily: F.semibold, fontSize: 16, lineHeight: 21, color: C.ink }), 'Strong');
-export const Label = make(() => ({ fontFamily: F.semibold, fontSize: 12, lineHeight: 16, color: C.ink3, letterSpacing: 0.6, textTransform: 'uppercase' }), 'Label');
+// Text styles, all Pixelify Sans. Pixel letters run wide, so sizes sit a step below the usual scale,
+// and line heights are generous so the square counters never crowd each other.
+export const Display = make(() => ({ fontFamily: F.displayBold, fontSize: 36, lineHeight: 42, color: C.ink, letterSpacing: -0.5 }), 'Display');
+export const Heading = make(() => ({ fontFamily: F.display, fontSize: 26, lineHeight: 32, color: C.ink, letterSpacing: -0.3 }), 'Heading');
+export const Title = make(() => ({ fontFamily: F.semibold, fontSize: 17, lineHeight: 23, color: C.ink }), 'Title');
+export const Body = make(() => ({ fontFamily: F.regular, fontSize: 15, lineHeight: 23, color: C.ink2 }), 'Body');
+export const Small = make(() => ({ fontFamily: F.regular, fontSize: 13, lineHeight: 19, color: C.ink3 }), 'Small');
+export const Strong = make(() => ({ fontFamily: F.semibold, fontSize: 15, lineHeight: 21, color: C.ink }), 'Strong');
+export const Label = make(() => ({ fontFamily: F.medium, fontSize: 11, lineHeight: 15, color: C.ink3, letterSpacing: 1.2, textTransform: 'uppercase' }), 'Label');
 
 /**
  * Money, formatted the way people read it: smaller ₹, grouped Indian digits,
@@ -108,12 +111,12 @@ export function Amount({
   const abs = Math.abs(value);
   const rupees = Math.floor(abs).toLocaleString('en-IN');
   const paise = Math.round((abs % 1) * 100);
-  const family = display ? F.display : F.semibold;
+  const family = display ? F.displayBold : F.semibold;
   const negative = value < 0 && !sign;
   return (
     <Text testID={testID} style={[{ fontFamily: family, fontSize: size, color, fontVariant: ['tabular-nums'], letterSpacing: display ? -0.5 : -0.2 }, style]}>
       {sign || (negative ? '−' : '')}
-      <Text style={{ fontSize: size * 0.62, fontFamily: display ? F.display : F.medium }}>₹</Text>
+      <Text style={{ fontSize: size * 0.7, fontFamily: F.semibold }}>₹</Text>
       {rupees}
       {paise ? <Text style={{ color: display ? color : C.ink3, fontSize: size * 0.7 }}>.{String(paise).padStart(2, '0')}</Text> : null}
     </Text>
@@ -139,8 +142,16 @@ export function Card({
   testID?: string;
   accessibilityLabel?: string;
 }) {
-  const base = [s.card, dark && s.cardDark, padded && { padding: 18 }, style];
-  if (!onPress) return <View style={base}>{children}</View>;
+  const base = [s.card, dark && s.cardDark, padded && { padding: 20 }, style];
+  // Dark cards are the "vault" glass (balance, plans, rewards): aurora-tinted, with the pixel motif.
+  const body = (
+    <>
+      <Glass vault={dark} />
+      {dark && <PixelGrid />}
+      {children}
+    </>
+  );
+  if (!onPress) return <View style={base}>{body}</View>;
   return (
     <Pressable
       testID={testID}
@@ -152,8 +163,93 @@ export function Card({
       }}
       style={({ pressed }) => [...base, pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] }]}
     >
-      {children}
+      {body}
     </Pressable>
+  );
+}
+
+/**
+ * Frosted glass fill for any rounded container: backdrop blur where the platform has it
+ * (iOS, web), the translucent tint everywhere, and a liquid sheen across the top edge.
+ * Place it first inside a view with `overflow: 'hidden'`.
+ */
+export function Glass({ vault, strong, radius }: { vault?: boolean; strong?: boolean; radius?: number }) {
+  const dark = getScheme() === 'dark';
+  return (
+    // `radius` clips the glass itself, for containers that can't hide overflow (e.g. a raised button).
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, radius !== undefined && { borderRadius: radius, overflow: 'hidden' }]}>
+      {BLUR_OK && <BlurView intensity={strong ? 60 : 40} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />}
+      {vault && (
+        <LinearGradient
+          colors={dark ? ['rgba(194,122,58,0.24)', 'rgba(31,122,104,0.12)'] : ['rgba(22,20,18,0.9)', 'rgba(30,38,36,0.86)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
+      <LinearGradient colors={[vault && !dark ? 'rgba(255,255,255,0.12)' : C.sheen, 'rgba(255,255,255,0)']} style={[StyleSheet.absoluteFill, { bottom: '55%' }]} />
+    </View>
+  );
+}
+
+// Android's blur is experimental and costly; there the glass is a translucent tint instead.
+const BLUR_OK = Platform.OS === 'ios' || Platform.OS === 'web';
+
+/**
+ * The scene every glass surface sits in: one warm key light up and to the left, a cool bounce
+ * down and to the right, and a vignette that falls off into the floor. One light source, like a
+ * photographed object, rather than decorative glows. Rendered once, behind the navigator.
+ */
+export function Backdrop() {
+  const [key, bounce, floor] = C.aurora;
+  const dark = getScheme() === 'dark';
+  const o = dark ? 0.3 : 0.6;
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: C.paper }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden>
+      <Svg width="100%" height="100%" preserveAspectRatio="xMidYMid slice" viewBox="0 0 400 860">
+        <Defs>
+          <RadialGradient id="key" cx="50%" cy="50%" r="50%">
+            <Stop offset="0" stopColor={key} stopOpacity={o} />
+            <Stop offset="0.5" stopColor={key} stopOpacity={o * 0.4} />
+            <Stop offset="1" stopColor={key} stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="bounce" cx="50%" cy="50%" r="50%">
+            <Stop offset="0" stopColor={bounce} stopOpacity={o * 0.75} />
+            <Stop offset="1" stopColor={bounce} stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="vignette" cx="38%" cy="30%" r="85%">
+            <Stop offset="0.45" stopColor={floor} stopOpacity={0} />
+            <Stop offset="1" stopColor={floor} stopOpacity={dark ? 0.7 : 0.18} />
+          </RadialGradient>
+        </Defs>
+        <Rect x={-260} y={-300} width={720} height={720} fill="url(#key)" />
+        <Rect x={170} y={520} width={460} height={460} fill="url(#bounce)" />
+        <Rect x={0} y={0} width={400} height={860} fill="url(#vignette)" />
+      </Svg>
+    </View>
+  );
+}
+
+/**
+ * The signature motif: a block of pixels in the top-right corner of dark cards, fading out
+ * towards the content. Purely decorative, so it's hidden from screen readers and touches.
+ */
+export function PixelGrid({ size = 5, cols = 10, rows = 5, color = C.gold }: { size?: number; cols?: number; rows?: number; color?: string }) {
+  const gap = 3;
+  const cells: ReactNode[] = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      // Denser and brighter towards the corner; a fixed pattern, so it never shifts between renders.
+      const strength = (c / (cols - 1)) * (1 - r / rows);
+      if ((c * 7 + r * 13) % 5 > strength * 6) continue;
+      cells.push(<Rect key={`${r}-${c}`} x={c * (size + gap)} y={r * (size + gap)} width={size} height={size} rx={1} fill={color} opacity={0.1 + strength * 0.45} />);
+    }
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', top: 14, right: 14 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden>
+      <Svg width={cols * (size + gap)} height={rows * (size + gap)}>
+        {cells}
+      </Svg>
+    </View>
   );
 }
 
@@ -178,10 +274,10 @@ type ButtonProps = {
 export function Button({ label, onPress, kind = 'primary', icon, loading, disabled, small, style, testID }: ButtonProps) {
   const palette = {
     primary: { bg: C.primary, fg: C.onPrimary, border: C.primary },
-    secondary: { bg: 'transparent', fg: C.ink, border: C.lineStrong },
+    secondary: { bg: C.surface, fg: C.ink, border: C.lineStrong },
     ghost: { bg: 'transparent', fg: C.ink, border: 'transparent' },
-    // White with a black outline, so it reads on both black and white surfaces.
-    gold: { bg: C.gold, fg: '#000000', border: C.ink },
+    // The pistachio accent: for the one celebratory action on a slate surface.
+    gold: { bg: C.gold, fg: ON_ACCENT, border: C.gold },
     danger: { bg: 'transparent', fg: C.red, border: C.redSoft },
   }[kind];
   const off = disabled || loading;
@@ -200,17 +296,22 @@ export function Button({ label, onPress, kind = 'primary', icon, loading, disabl
         s.button,
         small && s.buttonSmall,
         { backgroundColor: palette.bg, borderColor: palette.border },
+        (kind === 'primary' || kind === 'gold') && s.glow,
+        kind === 'gold' && { shadowColor: C.gold },
         off && kind !== 'ghost' && { opacity: 0.35 },
         pressed && { transform: [{ scale: 0.98 }], opacity: 0.9 },
         style,
       ]}
     >
+      {kind === 'primary' || kind === 'gold' ? (
+        <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.45)', 'rgba(255,255,255,0)']} style={[StyleSheet.absoluteFill, { bottom: '50%', borderRadius: R.pill }]} />
+      ) : null}
       {loading ? (
         <ActivityIndicator color={palette.fg} />
       ) : (
         <>
           {icon && <Feather name={icon} size={small ? 15 : 17} color={palette.fg} style={{ marginRight: 8 }} />}
-          <Text style={{ fontFamily: F.semibold, fontSize: small ? 14 : 16, color: palette.fg, letterSpacing: -0.1 }}>{label}</Text>
+          <Text style={{ fontFamily: F.semibold, fontSize: small ? 14 : 16, color: palette.fg, letterSpacing: 0.2 }}>{label}</Text>
         </>
       )}
     </Pressable>
@@ -244,6 +345,7 @@ export function IconButton({
       hitSlop={8}
       style={({ pressed }) => [s.iconBtn, dark && { backgroundColor: C.night2, borderColor: C.night3 }, pressed && { opacity: 0.6 }]}
     >
+      <Glass />
       <Feather name={icon} size={19} color={dark ? C.nightText : C.ink} />
       {badge && <View style={s.dot} />}
     </Pressable>
@@ -251,6 +353,55 @@ export function IconButton({
 }
 
 /** Round icon tile with a label underneath (quick actions, services). */
+/**
+ * A pixel-game keycap: a cap that sits `depth` above its side and travels down when pressed, so
+ * the most-used actions feel like physical buttons. The cap is opaque (a glass cap would show its
+ * own side through it) and lit from the top left: a bright top edge, the side showing below.
+ */
+export function Keycap({
+  width,
+  height,
+  radius = 18,
+  depth = 5,
+  tone = 'plain',
+  pressed,
+  children,
+}: {
+  width: number;
+  height: number;
+  radius?: number;
+  depth?: number;
+  tone?: 'plain' | 'primary' | 'accent';
+  pressed: boolean;
+  children: ReactNode;
+}) {
+  const cap = tone === 'primary' ? C.primary : tone === 'accent' ? C.gold : C.keyCap;
+  const side = tone === 'primary' ? (getScheme() === 'dark' ? '#9AA3B5' : '#000000') : tone === 'accent' ? '#2E9C7E' : C.keySide;
+  const travel = pressed ? depth - 1 : 0;
+  return (
+    <View style={{ width, height: height + depth }}>
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height, borderRadius: radius, backgroundColor: side }} />
+      <View
+        style={{
+          width,
+          height,
+          borderRadius: radius,
+          backgroundColor: cap,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderTopWidth: 1,
+          borderLeftWidth: 1,
+          borderTopColor: 'rgba(255,255,255,0.22)',
+          borderLeftColor: 'rgba(255,255,255,0.1)',
+          transform: [{ translateY: travel }],
+        }}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
 export function ActionTile({
   icon,
   label,
@@ -264,8 +415,7 @@ export function ActionTile({
   tone?: 'light' | 'dark' | 'gold';
   testID?: string;
 }) {
-  const bg = tone === 'dark' ? C.primary : tone === 'gold' ? C.gold : C.surface;
-  const fg = tone === 'dark' ? C.onPrimary : tone === 'gold' ? '#000000' : C.ink;
+  const fg = tone === 'dark' ? C.onPrimary : tone === 'gold' ? ON_ACCENT : C.ink;
   return (
     <Pressable
       testID={testID}
@@ -275,14 +425,18 @@ export function ActionTile({
       }}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [{ alignItems: 'center', width: 76 }, pressed && { transform: [{ scale: 0.95 }] }]}
+      style={{ alignItems: 'center', width: 76 }}
     >
-      <View style={[s.tile, { backgroundColor: bg }, tone === 'light' && { borderWidth: StyleSheet.hairlineWidth, borderColor: C.lineStrong }]}>
-        <Feather name={icon} size={22} color={fg} />
-      </View>
-      <Text numberOfLines={2} style={s.tileLabel}>
-        {label}
-      </Text>
+      {({ pressed }) => (
+        <>
+          <Keycap width={60} height={58} radius={18} tone={tone === 'dark' ? 'primary' : tone === 'gold' ? 'accent' : 'plain'} pressed={pressed}>
+            <Feather name={icon} size={22} color={fg} />
+          </Keycap>
+          <Text numberOfLines={2} style={s.tileLabel}>
+            {label}
+          </Text>
+        </>
+      )}
     </Pressable>
   );
 }
@@ -299,7 +453,7 @@ export function Avatar({ name, size = 44, dark }: { name: string; size?: number;
     .map((w) => w[0].toUpperCase())
     .join('');
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: dark ? C.night3 : t.bg, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: dark ? C.night3 : t.bg, alignItems: 'center', justifyContent: 'center' }}>
       {initials ? (
         <Text style={{ fontFamily: F.semibold, fontSize: size * 0.36, color: dark ? C.nightText : t.fg }}>{initials}</Text>
       ) : (
@@ -312,7 +466,7 @@ export function Avatar({ name, size = 44, dark }: { name: string; size?: number;
 export function IconMark({ icon, size = 40, tint, dark }: { icon: IconName; size?: number; tint?: string; dark?: boolean }) {
   const t = tintFor(tint ?? icon);
   return (
-    <View style={{ width: size, height: size, borderRadius: size * 0.32, backgroundColor: dark ? C.night3 : t.bg, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, borderRadius: size * 0.26, backgroundColor: dark ? C.night3 : t.bg, alignItems: 'center', justifyContent: 'center' }}>
       <Feather name={icon} size={size * 0.45} color={dark ? C.nightText : t.fg} />
     </View>
   );
@@ -392,7 +546,7 @@ export function Section({ title, action, onAction, children, style, dark }: { ti
         <Label color={dark ? C.nightMuted : C.ink3}>{title}</Label>
         {action && (
           <Pressable onPress={onAction} hitSlop={10} accessibilityRole="button" accessibilityLabel={action}>
-            <Text style={{ fontFamily: F.semibold, fontSize: 13, color: dark ? C.gold : C.ink }}>{action}</Text>
+            <Text style={{ fontFamily: F.semibold, fontSize: 13, color: dark ? C.gold : C.blue }}>{action}</Text>
           </Pressable>
         )}
       </View>
@@ -408,9 +562,9 @@ export function Field({ label, prefix, hint, error, style, onFocus, onBlur, ...r
   return (
     <View style={{ marginBottom: 16 }}>
       {label ? <Small color={C.ink2} style={{ marginBottom: 6, fontFamily: F.medium }}>{label}</Small> : null}
-      <View style={[s.field, focused && { borderColor: C.primary, borderWidth: 2, paddingHorizontal: 13 }, error ? { borderColor: C.red } : null]}>
+      <View style={[s.field, focused && { borderColor: C.gold, borderWidth: 2, paddingHorizontal: 13 }, error ? { borderColor: C.red } : null]}>
         {prefix ? <Text style={s.fieldPrefix}>{prefix}</Text> : null}
-        <TextInput selectionColor={C.ink} cursorColor={C.ink}
+        <TextInput selectionColor={C.gold} cursorColor={C.gold}
           placeholderTextColor={C.ink3}
           style={[s.fieldInput, NO_OUTLINE, style]}
           accessibilityLabel={rest.accessibilityLabel ?? label}
@@ -444,7 +598,7 @@ export function Segmented<T extends string>({ options, value, onChange, dark }: 
             }}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }} aria-selected={on}
-            style={[s.segmentItem, on && { backgroundColor: dark ? C.night3 : C.surface }]}
+            style={[s.segmentItem, on && { backgroundColor: dark ? C.night3 : C.lineStrong }]}
           >
             <Text style={{ fontFamily: F.semibold, fontSize: 14, color: on ? (dark ? C.nightText : C.ink) : dark ? C.nightMuted : C.ink3 }}>{o.label}</Text>
           </Pressable>
@@ -463,7 +617,7 @@ export function Chip({ label, active, onPress, icon }: { label: string; active?:
       }}
       accessibilityRole="button"
       accessibilityState={{ selected: !!active }} aria-selected={!!active}
-      style={[s.chip, active && { backgroundColor: C.primary, borderColor: C.primary }]}
+      style={[s.chip, active && { backgroundColor: C.primary, borderColor: C.primary }, !active && { backgroundColor: C.surface }]}
     >
       {icon && <Feather name={icon} size={13} color={active ? C.onPrimary : C.ink2} style={{ marginRight: 6 }} />}
       <Text style={{ fontFamily: F.medium, fontSize: 14, color: active ? C.onPrimary : C.ink2 }}>{label}</Text>
@@ -488,7 +642,7 @@ export function Toggle({ value, onChange, label, disabled }: { value: boolean; o
         haptic();
         onChange(!value);
       }}
-      style={[s.toggle, { backgroundColor: value ? C.green : C.lineStrong }, disabled && { opacity: 0.55 }]}
+      style={[s.toggle, { backgroundColor: value ? C.gold : C.lineStrong }, disabled && { opacity: 0.55 }]}
     >
       <Animated.View style={[s.knob, { transform: [{ translateX: x.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) }] }]} />
     </Pressable>
@@ -500,8 +654,8 @@ export function Toggle({ value, onChange, label, disabled }: { value: boolean; o
 export function Progress({ value, max = 100, color = C.ink, track = C.paperDeep, height = 6 }: { value: number; max?: number; color?: string; track?: string; height?: number }) {
   const pct = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
   return (
-    <View style={{ height, borderRadius: height, backgroundColor: track, overflow: 'hidden' }} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(pct * 100) }}>
-      <View style={{ width: `${pct * 100}%`, height: '100%', borderRadius: height, backgroundColor: color }} />
+    <View style={{ height, borderRadius: 2, backgroundColor: track, overflow: 'hidden' }} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(pct * 100) }}>
+      <View style={{ width: `${pct * 100}%`, height: '100%', borderRadius: 2, backgroundColor: color }} />
     </View>
   );
 }
@@ -523,7 +677,7 @@ export function Ring({ value, size = 56, stroke = 6, color = C.ink, track = C.pa
           fill="none"
           strokeDasharray={`${c} ${c}`}
           strokeDashoffset={c * (1 - pct)}
-          strokeLinecap="round"
+          strokeLinecap="butt"
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
@@ -617,9 +771,10 @@ type ScreenProps = {
 export function Screen({ title, kicker, back = true, right, children, dark, scroll = true, refreshing, onRefresh, footer, contentStyle }: ScreenProps) {
   const router = useRouter();
   useStatusBar(dark ? 'light' : 'dark');
-  const bg = dark ? C.night : C.paper;
+  // Screens are transparent and float on the shared Backdrop. A `dark` screen (Rewards) sets its
+  // text light-on-dark, so it paints the vault surface: a faint lift in dark mode, smoked in light.
   return (
-    <View style={{ flex: 1, backgroundColor: bg }}>
+    <View style={{ flex: 1, backgroundColor: dark ? C.night : 'transparent' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {(back || right) && (
           <View style={s.topBar}>
@@ -651,7 +806,12 @@ export function Screen({ title, kicker, back = true, right, children, dark, scro
             {children}
           </View>
         )}
-        {footer ? <View style={[s.footer, { backgroundColor: bg, borderTopColor: dark ? C.night3 : C.line }]}>{footer}</View> : null}
+        {footer ? (
+          <View style={[s.footer, { borderTopColor: dark ? C.night3 : C.line }]}>
+            <Glass strong />
+            {footer}
+          </View>
+        ) : null}
       </SafeAreaView>
     </View>
   );
@@ -674,9 +834,10 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
         <View style={s.sheet}>
+          <Glass strong />
           <View style={s.grabber} />
           <View style={[s.sectionHead, { marginBottom: 14 }]}>
-            <Heading style={{ fontSize: 26, lineHeight: 30 }}>{title}</Heading>
+            <Heading style={{ fontSize: 22, lineHeight: 28 }}>{title}</Heading>
             <IconButton icon="x" label="Close" onPress={onClose} />
           </View>
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -701,35 +862,36 @@ export function Pill({ label, tone = 'neutral', icon }: { label: string; tone?: 
   return (
     <View style={[s.pill, { backgroundColor: t.bg }]}>
       {icon && <Feather name={icon} size={11} color={t.fg} style={{ marginRight: 4 }} />}
-      <Text style={{ fontFamily: F.semibold, fontSize: 12, color: t.fg }}>{label}</Text>
+      <Text style={{ fontFamily: F.medium, fontSize: 12, color: t.fg, letterSpacing: 0.3 }}>{label}</Text>
     </View>
   );
 }
 
 export const s = themed(() => StyleSheet.create({
-  card: { backgroundColor: C.surface, borderRadius: R.md, borderWidth: StyleSheet.hairlineWidth, borderColor: C.line },
-  cardDark: { backgroundColor: C.night, borderColor: C.night },
+  card: { backgroundColor: C.surface, borderRadius: R.md, borderWidth: 1, borderColor: C.line, overflow: 'hidden' },
+  cardDark: { backgroundColor: C.night, borderColor: C.lineStrong },
+  glow: { shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
   button: { height: 54, borderRadius: R.pill, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 },
   buttonSmall: { height: 40, paddingHorizontal: 16 },
-  iconBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: C.line },
-  dot: { position: 'absolute', top: 9, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: C.red, borderWidth: 1.5, borderColor: C.surface },
-  tile: { width: 58, height: 58, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  tileLabel: { fontFamily: F.medium, fontSize: 12.5, lineHeight: 16, color: C.ink, marginTop: 8, textAlign: 'center' },
+  iconBtn: { width: 44, height: 44, borderRadius: 22, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
+  dot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 1, backgroundColor: C.red, borderWidth: 1.5, borderColor: C.surface },
+  tile: { width: 60, height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  tileLabel: { fontFamily: F.medium, fontSize: 12, lineHeight: 16, color: C.ink, marginTop: 8, textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  field: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: R.sm, borderWidth: 1, borderColor: C.line, paddingHorizontal: 14, minHeight: 52 },
+  field: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.paperDeep, borderRadius: R.sm, borderWidth: 1, borderColor: C.line, paddingHorizontal: 14, minHeight: 52 },
   fieldPrefix: { fontFamily: F.medium, fontSize: 16, color: C.ink3, marginRight: 8 },
   fieldInput: { flex: 1, fontFamily: F.medium, fontSize: 16, color: C.ink, paddingVertical: 14, ...NO_OUTLINE },
-  segment: { flexDirection: 'row', backgroundColor: C.paperDeep, borderRadius: R.pill, padding: 4 },
+  segment: { flexDirection: 'row', backgroundColor: C.paperDeep, borderRadius: R.pill, padding: 4, borderWidth: 1, borderColor: C.line },
   segmentItem: { flex: 1, height: 38, borderRadius: R.pill, alignItems: 'center', justifyContent: 'center' },
   chip: { flexDirection: 'row', alignItems: 'center', height: 36, paddingHorizontal: 14, borderRadius: R.pill, borderWidth: 1, borderColor: C.lineStrong, marginRight: 8 },
-  toggle: { width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center' },
+  toggle: { width: 48, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center' },
   knob: { width: 22, height: 22, borderRadius: 11, backgroundColor: C.surface },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: GUTTER, paddingTop: 6, paddingBottom: 4 },
   content: { paddingHorizontal: GUTTER, paddingBottom: 130 },
-  footer: { paddingHorizontal: GUTTER, paddingTop: 12, paddingBottom: 22, borderTopWidth: StyleSheet.hairlineWidth },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: C.paper, borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg, paddingHorizontal: GUTTER, paddingTop: 10, paddingBottom: 34, maxHeight: '90%' },
+  footer: { paddingHorizontal: GUTTER, paddingTop: 12, paddingBottom: 22, borderTopWidth: 1, overflow: 'hidden', backgroundColor: C.glass },
+  backdrop: { flex: 1, backgroundColor: 'rgba(3,5,10,0.55)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: C.glass, borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg, borderWidth: 1, borderBottomWidth: 0, borderColor: C.lineStrong, overflow: 'hidden', paddingHorizontal: GUTTER, paddingTop: 10, paddingBottom: 34, maxHeight: '90%' },
   grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.lineStrong, marginBottom: 14 },
-  pill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, height: 24, borderRadius: R.pill, alignSelf: 'flex-start' },
+  pill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, height: 24, borderRadius: R.pill, alignSelf: 'flex-start' },
 }));

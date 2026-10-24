@@ -11,7 +11,13 @@ export const formatNumber = (num: number): string => {
   return new Intl.NumberFormat('en-IN').format(num);
 };
 
-export const formatDate = (dateString: string): string => {
+/** Read a typed amount such as "1,00,000" or "₹ 2,500.50". NaN if it isn't a plain number (parseFloat would read "1,00,000" as 1). */
+export const parseAmount = (raw: string): number => {
+  const s = raw.replace(/[₹,\s]/g, '');
+  return /^\d+(\.\d+)?$/.test(s) ? Number(s) : NaN;
+};
+
+export const formatDate =(dateString: string): string => {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-IN', {
     day: 'numeric',

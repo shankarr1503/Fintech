@@ -4,25 +4,37 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getReceipt, Receipt } from '../../src/services/receipt';
-import { getPaymentStatus } from '../../src/services/api';
-import { Coin } from '../../src/game/Coin';
+import { getPaymentStatus, paymentByKey } from '../../src/services/api';
+import { VoxelCoin } from '../../src/ui/three/Voxel';
 import { Amount, Button, Divider, Label, NATIVE, Small, useStatusBar } from '../../src/ui/kit';
-import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
+import { C, F, GUTTER, R, STATUS_BG, themed } from '../../src/ui/theme';
 
 // Each state gets its own colour, icon and plain-language explanation.
 const STATE = {
-  // Greys only: each state also has its own icon and title, so nothing depends on colour.
-  success: { bg: '#000000', icon: 'check', title: 'Paid' },
-  pending: { bg: '#2B2B2B', icon: 'clock', title: 'Waiting for the bank' },
-  on_hold: { bg: '#2B2B2B', icon: 'pause', title: 'On hold' },
-  failed: { bg: '#474747', icon: 'x', title: 'Payment failed' },
+  // Muted green, slate, ochre and brick; each state also has its own icon and title,
+  // so nothing depends on colour alone.
+  success: { bg: STATUS_BG.success, icon: 'check', title: 'Paid' },
+  pending: { bg: STATUS_BG.pending, icon: 'clock', title: 'Waiting for the bank' },
+  on_hold: { bg: STATUS_BG.on_hold, icon: 'pause', title: 'On hold' },
+  failed: { bg: STATUS_BG.failed, icon: 'x', title: 'Payment failed' },
+  unknown: { bg: STATUS_BG.unknown, icon: 'help-circle', title: 'Checking your payment' },
 } as const;
 
 const EXPLAIN: Record<string, string> = {
   pending: "Your bank hasn't confirmed yet. Most payments complete within a minute. We'll notify you either way; please don't pay again.",
+  unknown: "The connection dropped before CoinQuest replied, so we're checking whether this payment went through. Please don't pay again until we know.",
   on_hold: 'Held for a routine security check. No money has moved. We will update you within 24 hours.',
   failed: "If your bank shows a debit, it reverses it automatically by the next working day. See the Refund Policy if it doesn’t.",
 };
+const STILL_PENDING = "Your bank still hasn't confirmed. In rare cases this takes a few hours. We'll notify you when it settles, and Activity shows the latest status. Please don't pay again.";
+const STILL_UNKNOWN = "We still can't confirm this payment. Check Activity before you pay again, so you don't pay twice.";
+const NEVER_RECEIVED = 'This payment never reached CoinQuest, so no money left your account';
+
+// The server reconciles payments stuck in pending after 2 minutes (RECONCILE_AFTER), so poll past that,
+// backing off from 2s to 15s between checks.
+const POLL_FOR_MS = 5 * 60_000;
+const POLL_FIRST_MS = 2000;
+const POLL_MAX_MS = 15_000;
 
 export default function PaymentSuccess() {
   const router = useRouter();
@@ -42,25 +54,60 @@ export default function PaymentSuccess() {
     ]).start();
   }, [r, router, pop, rise]);
 
-  // Pending: keep asking for the final answer for about a minute.
+  // Pending or unknown: keep asking for the final answer, one request at a time. Late answers after
+  // unmount or after a final state are ignored.
+  const first = useRef(r).current;
+  const [stillPending, setStillPending] = useState(false);
   useEffect(() => {
-    if (!r || r.status !== 'pending' || !r.txnId) return;
-    let tries = 0;
-    const id = setInterval(async () => {
-      tries++;
+    if (!first || (first.status !== 'pending' && first.status !== 'unknown') || (!first.txnId && !first.key)) return;
+    const key = first.key;
+    let txnId = first.txnId;
+    let notFound = false;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let delay = POLL_FIRST_MS;
+    const started = Date.now();
+    const tick = async () => {
       try {
-        const latest = await getPaymentStatus(r.txnId);
-        if (latest.status !== 'pending') {
-          setR({ ...r, status: latest.status, reason: latest.reason, coins: latest.coins_earned ?? r.coins, ref: latest.rail_ref || r.ref });
-          clearInterval(id);
+        // No transaction id yet (the server was still processing, or we don't know if it got the
+        // payment): find it by the idempotency key.
+        const latest = txnId ? await getPaymentStatus(txnId) : await paymentByKey(key!);
+        if (cancelled) return;
+        notFound = false;
+        // The server has it, so it's no longer unknown, only waiting.
+        if (latest.status === 'processing' || latest.status === 'pending') setR((cur) => cur && (cur.status === 'unknown' ? { ...cur, status: 'pending' } : cur));
+        if (!txnId && latest.transaction_id) {
+          txnId = latest.transaction_id as string;
+          setR((cur) => cur && { ...cur, txnId: latest.transaction_id, ref: latest.rail_ref || latest.transaction_id });
         }
-      } catch {
-        // offline or server busy: try again on the next tick
+        if (latest.status !== 'pending' && latest.status !== 'processing') {
+          cancelled = true;
+          setR(
+            (cur) =>
+              cur && { ...cur, status: latest.status, reason: latest.reason, coins: latest.coins_earned ?? cur.coins, reward: latest.reward ?? cur.reward, ref: latest.rail_ref || cur.ref },
+          );
+          return;
+        }
+      } catch (e: any) {
+        // offline, server busy, or the payment hasn't reached the server (yet): try again on the next tick
+        if (cancelled) return;
+        notFound = !txnId && e?.response?.status === 404;
       }
-      if (tries >= 20) clearInterval(id);
-    }, 3000);
-    return () => clearInterval(id);
-  }, [r]);
+      if (Date.now() - started >= POLL_FOR_MS) {
+        // Minutes later the server still has no record of the key: the request never arrived.
+        if (notFound && first.status === 'unknown') setR((cur) => cur && (cur.status === 'unknown' ? { ...cur, status: 'failed', reason: NEVER_RECEIVED } : cur));
+        else setStillPending(true);
+        return;
+      }
+      delay = Math.min(delay * 1.5, POLL_MAX_MS);
+      timer = setTimeout(tick, delay);
+    };
+    timer = setTimeout(tick, delay);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [first]);
 
   if (!r) return null;
   const state = STATE[r.status] ?? STATE.success;
@@ -96,7 +143,7 @@ export default function PaymentSuccess() {
           {!ok && (
             <Text style={styles.explain} accessibilityLiveRegion="polite">
               {r.reason && r.status === 'failed' ? `${r.reason}. ` : ''}
-              {EXPLAIN[r.status]}
+              {stillPending && r.status === 'pending' ? STILL_PENDING : stillPending && r.status === 'unknown' ? STILL_UNKNOWN : EXPLAIN[r.status]}
             </Text>
           )}
         </View>
@@ -105,7 +152,7 @@ export default function PaymentSuccess() {
           {ok && (totalCoins > 0 || quests.length || badges.length) ? (
             <>
               <View style={styles.rewardRow}>
-                <Coin size={26} />
+                <VoxelCoin size={44} spin={0} flipIn accessibilityLabel="Coins earned" />
                 <View style={{ marginLeft: 12, flex: 1 }}>
                   <Text style={styles.rewardTitle}>
                     +{totalCoins} coins{reward?.xp_earned ? `  ·  +${reward.xp_earned} XP` : ''}
@@ -167,11 +214,11 @@ export default function PaymentSuccess() {
 const styles = themed(() => StyleSheet.create({
   root: { flex: 1 },
   top: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: GUTTER },
-  check: { width: 84, height: 84, borderRadius: 42, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  paid: { fontFamily: F.medium, fontSize: 16, color: '#D9D9D9' },
-  to: { fontFamily: F.semibold, fontSize: 18, color: '#FFFFFF', marginTop: 4 },
-  explain: { fontFamily: F.regular, fontSize: 14, lineHeight: 20, color: '#FFFFFF', opacity: 0.85, textAlign: 'center', marginTop: 14, maxWidth: 320 },
-  meta: { fontFamily: F.regular, fontSize: 14, color: '#D9D9D9', marginTop: 6 },
+  check: { width: 84, height: 84, borderRadius: 20, backgroundColor: '#F2F0EA', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  paid: { fontFamily: F.medium, fontSize: 15, color: '#E3E8DE', letterSpacing: 1.2, textTransform: 'uppercase' },
+  to: { fontFamily: F.semibold, fontSize: 18, color: '#F2F0EA', marginTop: 4 },
+  explain: { fontFamily: F.regular, fontSize: 14, lineHeight: 21, color: '#F2F0EA', opacity: 0.9, textAlign: 'center', marginTop: 14, maxWidth: 320 },
+  meta: { fontFamily: F.regular, fontSize: 14, color: '#E3E8DE', marginTop: 6 },
   sheet: { backgroundColor: C.paper, marginHorizontal: 12, marginBottom: 12, borderRadius: R.lg, padding: 20 },
   rewardRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14 },
   rewardTitle: { fontFamily: F.semibold, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] },

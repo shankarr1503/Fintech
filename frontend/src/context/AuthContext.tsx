@@ -1,6 +1,7 @@
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { logoutSession, setAuthToken, setUnauthorizedHandler } from '../services/api';
+import { getAuthToken, logoutSession, setAuthToken, setUnauthorizedHandler } from '../services/api';
+import { deleteSecret, getSecret, setSecret } from '../services/secureStorage';
 
 export interface User {
   id: string;
@@ -35,13 +36,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearSession = useCallback(async () => {
     setAuthToken(null);
     setUser(null);
-    await AsyncStorage.multiRemove([USER_KEY, TOKEN_KEY]);
+    await Promise.all([AsyncStorage.removeItem(USER_KEY), deleteSecret(TOKEN_KEY)]);
   }, []);
 
-  // Revoke the token server-side too; sign out locally even if the server is unreachable.
+  // Sign out locally first, so a slow or unreachable server can't keep the session on this device;
+  // then revoke the token server-side, best effort.
   const logout = useCallback(async () => {
-    await logoutSession().catch(() => {});
+    const token = getAuthToken();
     await clearSession();
+    if (token) logoutSession(token).catch(() => {});
   }, [clearSession]);
 
   useEffect(() => {
@@ -49,8 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUnauthorizedHandler(() => {
       clearSession();
     });
-    AsyncStorage.multiGet([USER_KEY, TOKEN_KEY])
-      .then(([[, storedUser], [, token]]) => {
+    Promise.all([AsyncStorage.getItem(USER_KEY), getSecret(TOKEN_KEY)])
+      .then(([storedUser, token]) => {
         // A user without a token is a pre-auth session: make them sign in again.
         if (storedUser && token) {
           setAuthToken(token);
@@ -65,10 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (userData: User, token: string) => {
     setAuthToken(token);
-    await AsyncStorage.multiSet([
-      [USER_KEY, JSON.stringify(userData)],
-      [TOKEN_KEY, token],
-    ]);
+    // The token goes to the Keychain / Keystore (see secureStorage); the profile isn't secret.
+    await Promise.all([AsyncStorage.setItem(USER_KEY, JSON.stringify(userData)), setSecret(TOKEN_KEY, token)]);
     setUser(userData);
   }, []);
 

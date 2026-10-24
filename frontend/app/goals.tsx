@@ -6,7 +6,7 @@ import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
 import { Amount, Body, Button, Card, Chip, Empty, ErrorState, Field, IconButton, Label, Ring, Screen, Section, Sheet, SkeletonScreen, Small, Strong } from '../src/ui/kit';
 import { C, themed } from '../src/ui/theme';
-import { formatCompact, formatDate } from '../src/utils/format';
+import { formatCompact, formatDate, parseAmount } from '../src/utils/format';
 
 type Goal = { id: string; name: string; target_amount: number; current_amount: number; monthly_contribution: number; target_date?: string };
 
@@ -34,11 +34,13 @@ export default function Goals() {
   const saved = data.goals.reduce((s, g) => s + g.current_amount, 0);
 
   const create = async () => {
-    const t = parseFloat(form.target);
+    const t = parseAmount(form.target);
+    const monthly = form.monthly.trim() ? parseAmount(form.monthly) : 0;
     if (!form.name.trim() || !(t > 0)) return Alert.alert('Almost there', 'Give the goal a name and an amount.');
+    if (!(monthly >= 0)) return Alert.alert('Check the monthly amount', 'Enter it as a number, like 5,000.');
     setBusy(true);
     try {
-      const res = await createSavingsGoal({ user_id: userId, name: form.name.trim(), target_amount: t, monthly_contribution: parseFloat(form.monthly) || 0 });
+      const res = await createSavingsGoal({ user_id: userId, name: form.name.trim(), target_amount: t, monthly_contribution: monthly });
       setCreating(false);
       setForm({ name: '', target: '', monthly: '' });
       celebrate('Goal created', res.reward);
@@ -52,8 +54,8 @@ export default function Goals() {
 
   const add = async () => {
     if (!target) return;
-    const a = parseFloat(amount);
-    if (!(a > 0)) return;
+    const a = parseAmount(amount);
+    if (!(a > 0)) return Alert.alert('Check the amount', 'Enter it as a number, like 1,000.');
     setBusy(true);
     try {
       const res = await contributeSavings(target.id, a);

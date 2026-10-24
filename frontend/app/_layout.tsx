@@ -1,15 +1,14 @@
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 // Small-caps typefaces: real small-cap glyphs, so they look the same on iOS, Android and web.
-import { PlayfairDisplaySC_400Regular, PlayfairDisplaySC_400Regular_Italic } from '@expo-google-fonts/playfair-display-sc';
-import { AlegreyaSansSC_400Regular, AlegreyaSansSC_500Medium, AlegreyaSansSC_700Bold, AlegreyaSansSC_800ExtraBold } from '@expo-google-fonts/alegreya-sans-sc';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { GameProvider } from '../src/game/GameContext';
-import { C } from '../src/ui/theme';
+import { Backdrop } from '../src/ui/kit';
 import { AppearanceProvider, useAppearance } from '../src/ui/appearance';
 import { AppLock } from '../src/ui/AppLock';
 import { registerForPush } from '../src/services/push';
@@ -57,14 +56,18 @@ function ReturnAfterThemeChange() {
   return null;
 }
 
+const navTheme = (scheme: 'light' | 'dark') => {
+  const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+  return { ...base, colors: { ...base.colors, background: 'transparent', card: 'transparent' } };
+};
+
 export default function RootLayout() {
+  // Pixelify Sans with the ₹ sign and arrows added (scripts/build-fonts.py). Bundled, never fetched.
   const [fontsLoaded, fontError] = useFonts({
-    PlayfairDisplaySC_400Regular,
-    PlayfairDisplaySC_400Regular_Italic,
-    AlegreyaSansSC_400Regular,
-    AlegreyaSansSC_500Medium,
-    AlegreyaSansSC_700Bold,
-    AlegreyaSansSC_800ExtraBold,
+    'PixelifySans-Regular': require('../assets/fonts/PixelifySans-400Regular.ttf'),
+    'PixelifySans-Medium': require('../assets/fonts/PixelifySans-500Medium.ttf'),
+    'PixelifySans-SemiBold': require('../assets/fonts/PixelifySans-600SemiBold.ttf'),
+    'PixelifySans-Bold': require('../assets/fonts/PixelifySans-700Bold.ttf'),
   });
 
   useEffect(() => {
@@ -80,10 +83,14 @@ export default function RootLayout() {
           <AuthProvider>
             {/* Keyed by scheme: a theme switch re-renders everything in the new palette. */}
             <GameProvider key={scheme}>
+              {/* Navigation paints every screen container; keep it transparent so the aurora shows. */}
+              <ThemeProvider value={navTheme(scheme)}>
+              {/* One aurora behind every (transparent) screen: the glass surfaces float on it. */}
+              <Backdrop />
               <AuthGate />
               <ReturnAfterThemeChange />
               <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.paper }, animation: 'slide_from_right' }}>
+              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' }, animation: 'fade' }}>
                 <Stack.Screen name="index" options={{ animation: 'fade' }} />
                 <Stack.Screen name="(auth)" />
                 <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
@@ -93,8 +100,10 @@ export default function RootLayout() {
               <OfflineBanner />
               <CookieNotice />
               <PageMeta />
-              <AppLock />
+              </ThemeProvider>
             </GameProvider>
+            {/* Outside the keyed subtree: a theme switch must neither reset nor re-trigger the lock. */}
+            <AppLock />
           </AuthProvider>
         )}
       </AppearanceProvider>

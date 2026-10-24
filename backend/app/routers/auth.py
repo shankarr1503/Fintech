@@ -7,13 +7,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from pymongo import ReturnDocument
 
 from ..auth import (
     check_pin,
     create_session,
     current_user,
     device_of,
-    hash_pin,
+    hash_pin_async,
     mfa_token,
     pin_problem,
     require_user,
@@ -71,20 +72,31 @@ async def send_otp(request: OTPRequest, http: Request):
 async def _check_otp(phone: str, otp: str, http: Request) -> None:
     """Raise unless `otp` is the live code for `phone`. Doesn't use the code up (see _consume_otp)."""
     await limit(f"otp-verify:ip:{client_ip(http)}", settings.otp_verifies_per_ip_10min, 600)
-    code = await db.otp_codes.find_one({"phone": phone})
-    if not code or datetime.utcnow() > code["expires_at"]:
-        raise HTTPException(status_code=400, detail=INVALID)
-    if not hmac.compare_digest(code["otp_hash"], _hash_otp(phone, otp)):
-        user = await db.users.find_one({"phone": phone})
-        await audit.record("login_otp_failed", user["id"] if user else None, {"phone": f"******{phone[-4:]}"}, http)
-        attempts = code.get("attempts", 0) + 1
-        if attempts >= MAX_OTP_ATTEMPTS:
-            # Burn the code: guessing has to start over with a fresh (rate-limited) send.
+    # Reserve an attempt before comparing: the atomic $inc means parallel guesses each use up
+    # one of the MAX_OTP_ATTEMPTS, instead of all reading the same count.
+    code = await db.otp_codes.find_one_and_update(
+        {"phone": phone, "expires_at": {"$gt": datetime.utcnow()}, "attempts": {"$lt": MAX_OTP_ATTEMPTS}},
+        {"$inc": {"attempts": 1}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not code:
+        if await db.otp_codes.find_one({"phone": phone, "attempts": {"$gte": MAX_OTP_ATTEMPTS}}):
             await db.otp_codes.delete_one({"phone": phone})
             raise HTTPException(status_code=400, detail="Too many wrong codes. Request a new one.")
-        await db.otp_codes.update_one({"phone": phone}, {"$set": {"attempts": attempts}})
-        left = MAX_OTP_ATTEMPTS - attempts
-        raise HTTPException(status_code=400, detail=f"Wrong code. {left} attempt{'s' if left != 1 else ''} left.")
+        raise HTTPException(status_code=400, detail=INVALID)
+    if hmac.compare_digest(code["otp_hash"], _hash_otp(phone, otp)):
+        # Right code: the consent step may send it again, so give its attempts back.
+        await db.otp_codes.update_one({"phone": phone}, {"$set": {"attempts": 0}})
+        return
+    user = await db.users.find_one({"phone": phone})
+    await audit.record("login_otp_failed", user["id"] if user else None, {"phone": f"******{phone[-4:]}"}, http)
+    attempts = code["attempts"]
+    if attempts >= MAX_OTP_ATTEMPTS:
+        # Burn the code: guessing has to start over with a fresh (rate-limited) send.
+        await db.otp_codes.delete_one({"phone": phone})
+        raise HTTPException(status_code=400, detail="Too many wrong codes. Request a new one.")
+    left = MAX_OTP_ATTEMPTS - attempts
+    raise HTTPException(status_code=400, detail=f"Wrong code. {left} attempt{'s' if left != 1 else ''} left.")
 
 
 async def _consume_otp(phone: str) -> None:
@@ -124,6 +136,7 @@ async def verify_otp(request: OTPVerify, http: Request):
 class DeletionRequest(BaseModel):
     phone: str = Field(pattern=r"^[6-9]\d{9}$")
     otp: str = Field(pattern=r"^\d{6}$")
+    pin: Optional[str] = Field(default=None, pattern=r"^\d{4,6}$")
     confirm: bool = False
 
 
@@ -133,8 +146,14 @@ async def deletion_request(body: DeletionRequest, http: Request):
     if not body.confirm:
         raise HTTPException(status_code=400, detail="Confirm that you want your account deleted")
     await _check_otp(body.phone, body.otp, http)
-    await _consume_otp(body.phone)
     user = await db.users.find_one({"phone": body.phone})
+    if user and user.get("pin"):
+        # An OTP alone (e.g. after a SIM swap) mustn't be enough to erase an account for good.
+        # Forgot the PIN? Reset it from sign-in (OTP, plus PAN once KYC is done), then delete.
+        if not body.pin:
+            raise HTTPException(status_code=428, detail="Enter your app PIN to confirm. Forgot it? Reset it from the sign-in screen first.")
+        await check_pin(user, body.pin)
+    await _consume_otp(body.phone)
     if not user:
         return {"deleted": False, "message": "There's no CoinQuest account for this number, so there's nothing to delete."}
     await audit.record("account_erasure_requested", user["id"], {"via": "public_request"}, http)
@@ -148,7 +167,7 @@ async def deletion_request(body: DeletionRequest, http: Request):
 
 
 async def _finish_login(user: dict, http: Request) -> dict:
-    token = await create_session(user["id"], http)
+    token = await create_session(user["id"], http, needs_pin=not user.get("pin"))
     device = device_of(http)
     known = user.get("known_devices", [])
     if known and device["device_id"] not in known:
@@ -214,7 +233,7 @@ async def set_pin(body: PinSet, http: Request):
     if problem:
         raise HTTPException(status_code=400, detail=problem)
     changed = bool(user.get("pin"))
-    await db.users.update_one({"id": user["id"]}, {"$set": {"pin": hash_pin(body.pin), "pin_attempts": 0}, "$unset": {"pin_locked_until": ""}})
+    await db.users.update_one({"id": user["id"]}, {"$set": {"pin": await hash_pin_async(body.pin), "pin_attempts": 0}, "$unset": {"pin_locked_until": ""}})
     await audit.record("pin_changed" if changed else "pin_set", user["id"], {}, http)
     if changed:
         await notify.send(user["id"], "security", "PIN changed", "Your CoinQuest PIN was changed. If this wasn't you, contact support now.")
@@ -244,7 +263,7 @@ async def reset_pin(body: PinReset, http: Request):
         raise HTTPException(status_code=400, detail=problem)
     await db.users.update_one(
         {"id": user_id},
-        {"$set": {"pin": hash_pin(body.new_pin), "pin_attempts": 0, "pin_reset_at": datetime.utcnow()}, "$unset": {"pin_locked_until": ""}},
+        {"$set": {"pin": await hash_pin_async(body.new_pin), "pin_attempts": 0, "pin_reset_at": datetime.utcnow()}, "$unset": {"pin_locked_until": ""}},
     )
     # A reset is a classic account-takeover step: end every other session and tell the user.
     await db.sessions.update_many({"user_id": user_id, "revoked": False}, {"$set": {"revoked": True, "revoked_reason": "pin_reset"}})

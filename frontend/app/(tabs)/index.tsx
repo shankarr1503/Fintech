@@ -36,6 +36,7 @@ import {
   useStatusBar,
 } from '../../src/ui/kit';
 import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
+import { Tilt } from '../../src/ui/three/Tilt';
 import { daysUntil, formatCompact } from '../../src/utils/format';
 
 const SERVICES: { label: string; icon: IconName; route: string }[] = [
@@ -113,7 +114,7 @@ export default function Home() {
   const d = data.dashboard;
   const spentShare = d.income > 0 ? d.spending.this_month / d.income : 0;
   const insight = (data.insights as any[])[0];
-  const debtFree = data.debts?.avalanche_analysis?.debt_free_date;
+  const debtFree = data.debts?.avalanche_analysis?.debt_free_date ?? (data.debts?.avalanche_analysis?.pays_off === false ? 'Not yet' : undefined);
   const questsLeft = profile ? profile.quests.filter((q) => !q.done).length : 0;
 
   return (
@@ -156,6 +157,8 @@ export default function Home() {
         )}
 
         {/* Hero: money left this month */}
+        {/* The balance is a physical card: it tilts with the phone, lit from the top left. */}
+        <Tilt radius={R.lg}>
         <Card dark style={styles.hero} onPress={() => go('/expenses')} accessibilityLabel="Spending this month" testID="hero">
           <View style={styles.between}>
             <Label color={C.nightMuted}>Left this month</Label>
@@ -182,6 +185,7 @@ export default function Home() {
             </Small>
           </View>
         </Card>
+        </Tilt>
 
         {/* The four jobs */}
         <View style={styles.actions}>
@@ -337,7 +341,7 @@ export default function Home() {
 
 const styles = themed(() => StyleSheet.create({
   demo: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.amberSoft, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginTop: 12 },
-  safe: { flex: 1, backgroundColor: C.paper },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   content: { paddingHorizontal: GUTTER, paddingBottom: 120 },
   header: { flexDirection: 'row', alignItems: 'center', paddingTop: 10, paddingBottom: 18 },
   row: { flexDirection: 'row', alignItems: 'center' },

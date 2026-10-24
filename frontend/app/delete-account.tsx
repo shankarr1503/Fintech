@@ -19,6 +19,8 @@ export default function DeleteAccount() {
   const [sent, setSent] = useState(false);
   const [demoCode, setDemoCode] = useState('');
   const [otp, setOtp] = useState('');
+  const [pin, setPin] = useState('');
+  const [needsPin, setNeedsPin] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,10 +44,12 @@ export default function DeleteAccount() {
     setBusy(true);
     setError(null);
     try {
-      const res = await requestDeletion(phone, otp);
+      const res = await requestDeletion(phone, otp, pin || undefined);
       setDone(res.deleted ? `${res.message} Payment and KYC records are kept until ${res.retain_until} because anti-money-laundering law requires it, and used for nothing else.` : res.message);
       if (res.deleted && user?.phone === phone) await logout().catch(() => {});
-    } catch (e) {
+    } catch (e: any) {
+      // Accounts with a PIN need it too: an OTP alone (say, after a SIM swap) can't erase one.
+      if (e?.response?.status === 428) setNeedsPin(true);
       setError(errorMessage(e));
     } finally {
       setBusy(false);
@@ -87,13 +91,24 @@ export default function DeleteAccount() {
                     <Pill tone="gold" icon="info" label={`Demo mode · code ${demoCode}`} />
                   </View>
                 ) : null}
+                {needsPin ? (
+                  <Field
+                    label="App PIN"
+                    keyboardType="number-pad"
+                    secureTextEntry
+                    maxLength={6}
+                    value={pin}
+                    onChangeText={(t) => setPin(t.replace(/\D/g, ''))}
+                    testID="delete-pin"
+                  />
+                ) : null}
                 <Pressable onPress={() => setConfirm((c) => !c)} style={{ flexDirection: 'row', alignItems: 'flex-start' }} accessibilityRole="checkbox" accessibilityState={{ checked: confirm }} aria-checked={confirm} testID="delete-confirm">
                   <Feather name={confirm ? 'check-square' : 'square'} size={20} color={confirm ? C.red : C.ink3} />
                   <Small color={C.ink2} style={{ flex: 1, marginLeft: 10 }}>
                     Delete my CoinQuest account and personal data. I understand this can’t be undone and I’ll lose my coins, goals and history.
                   </Small>
                 </Pressable>
-                <Button label="Delete my account" kind="danger" style={{ marginTop: 16 }} disabled={otp.length !== 6 || !confirm} loading={busy} onPress={submit} testID="delete-submit" />
+                <Button label="Delete my account" kind="danger" style={{ marginTop: 16 }} disabled={otp.length !== 6 || !confirm || (needsPin && pin.length < 4)} loading={busy} onPress={submit} testID="delete-submit" />
               </>
             )}
             {error ? (

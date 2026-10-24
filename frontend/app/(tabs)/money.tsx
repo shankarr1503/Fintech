@@ -5,7 +5,7 @@ import { analyzeDebts, getAllAccounts, getCreditScore, getDashboard, getSavingsG
 import { useUserData } from '../../src/game/useData';
 import { TxnRow } from '../../src/ui/rows';
 import { Amount, Body, Card, Divider, ErrorState, IconMark, IconName, Label, Ring, Row, Screen, Section, SkeletonScreen, Small, Strong, Title } from '../../src/ui/kit';
-import { C, R, themed } from '../../src/ui/theme';
+import { C, R, SERIES, themed } from '../../src/ui/theme';
 import { formatCompact } from '../../src/utils/format';
 
 export default function MoneyTab() {
@@ -119,7 +119,11 @@ export default function MoneyTab() {
         <Card onPress={() => go('/debts')} accessibilityLabel="Debt payoff plan">
           <View style={styles.between}>
             <View>
-              <Title>{debts.avalanche_analysis?.debt_free_date ? `Debt-free by ${debts.avalanche_analysis.debt_free_date}` : 'No debts'}</Title>
+              <Title>{debts.avalanche_analysis?.debt_free_date
+                  ? `Debt-free by ${debts.avalanche_analysis.debt_free_date}`
+                  : debts.avalanche_analysis?.pays_off === false
+                    ? 'Payments don’t cover interest'
+                    : 'No debts'}</Title>
               <Small style={{ marginTop: 2 }}>
                 {formatCompact(debts.total_debt)} left · {formatCompact(debts.total_emi)}/month in EMIs
               </Small>
@@ -188,9 +192,8 @@ export default function MoneyTab() {
   );
 }
 
-// Muted, distinguishable steps (not a rainbow) for the spending bar.
-// Greys from darkest to lightest, so each slice still reads as different.
-const STACK = ['#000000', '#4D4D4D', '#808080', '#B3B3B3', '#D9D9D9'];
+// Muted, distinguishable steps (not a rainbow) for the spending bar; the legend names each slice.
+const STACK = SERIES;
 
 
 const styles = themed(() => StyleSheet.create({

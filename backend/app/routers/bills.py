@@ -8,6 +8,7 @@ from ..config import settings
 from ..db import db
 from ..ratelimit import limit
 from ..services import game
+from ..utils import to_ist
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ BILLS = [
 @router.get("/bills/{user_id}")
 async def get_bills(user_id: str):
     """Get all pending bills"""
-    month = datetime.utcnow().strftime("%Y-%m")
+    month = to_ist(datetime.utcnow()).strftime("%Y-%m")
     paid = {
         p["bill_id"]: p
         for p in await db.payments.find({"user_id": user_id, "type": "bill", "month": month}).to_list(100)
@@ -102,8 +103,10 @@ async def pay_bill(payment: dict):
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
 
-    month = datetime.utcnow().strftime("%Y-%m")
-    if await db.payments.find_one({"user_id": user_id, "type": "bill", "bill_id": bill["id"], "month": month}):
+    month = to_ist(datetime.utcnow()).strftime("%Y-%m")
+    if not settings.demo_mode:
+        raise HTTPException(status_code=503, detail="Bill payments open once our BBPS partner is connected.")
+    if not await game.claim_once(f"bill:{user_id}:{bill['id']}:{month}"):
         raise HTTPException(status_code=400, detail="This bill is already paid for this month")
 
     transaction_id = str(uuid.uuid4())

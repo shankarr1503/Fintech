@@ -30,9 +30,9 @@ def _digest(entry: Dict[str, Any]) -> str:
 def request_context(request: Optional[Request]) -> Dict[str, str]:
     if request is None:
         return {"ip": "system", "device": "system"}
-    forwarded = request.headers.get("x-forwarded-for")
-    ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
-    return {"ip": ip, "device": request.headers.get("x-device-name") or request.headers.get("user-agent", "unknown")[:80]}
+    from ..ratelimit import client_ip
+
+    return {"ip": client_ip(request), "device": request.headers.get("x-device-name") or request.headers.get("user-agent", "unknown")[:80]}
 
 
 async def record(action: str, user_id: Optional[str], details: Optional[Dict[str, Any]] = None, request: Optional[Request] = None) -> Dict[str, Any]:

@@ -112,7 +112,7 @@ async def complete_module(data: dict):
     if not course or not str(module_id).isdigit() or not 0 <= int(module_id) < len(course["lessons"]):
         raise HTTPException(status_code=404, detail="Lesson not found")
     progress = await get_learning_progress(user_id)
-    if f"{course_id}:{module_id}" in progress.get("modules_done", []):
+    if not await game.claim_once(f"module:{user_id}:{course_id}:{module_id}"):
         return {"message": "Already done", "xp_earned": 0, "total_xp": progress.get("total_xp", 0), "level": progress.get("level", 1), "reward": None}
 
     xp_earned = 50

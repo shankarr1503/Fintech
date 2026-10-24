@@ -221,3 +221,54 @@ def test_card_numbers_in_notes_are_masked(client):
     res = pay(client, uid, h, 120, note="card 4111 1111 1111 1111 thx").json()
     stored = run(db.upi_transactions.find_one({"id": res["transaction_id"]}))
     assert "4111 1111" not in stored["note"] and "••••1111" in stored["note"]
+
+
+def test_webhook_without_rail_ref_only_touches_the_named_payment(client):
+    a, ha = new_user(client)
+    b, hb = new_user(client)
+    b_txn = pay(client, b, hb, 710, to="timeout@coinquest").json()["transaction_id"]
+    a_txn = pay(client, a, ha, 720, to="timeout@coinquest").json()["transaction_id"]
+    event = {"event_id": uuid.uuid4().hex, "type": "payment.updated", "txn_id": a_txn, "status": "failed"}
+    assert webhook(client, event).json()["applied"] is True
+    assert client.get(f"/api/upi/transactions/{a_txn}", headers=ha).json()["status"] == "failed"
+    assert client.get(f"/api/upi/transactions/{b_txn}", headers=hb).json()["status"] == "pending"
+    neither = {"event_id": uuid.uuid4().hex, "type": "payment.updated", "status": "success"}
+    assert webhook(client, neither).status_code == 400
+
+
+def test_failed_webhook_is_not_remembered_and_receipts_dedupe(client):
+    uid, h = new_user(client)
+    bad = {"event_id": uuid.uuid4().hex, "type": "payment.received", "user_id": uid, "amount": "nan", "rail_ref": "r-nan"}
+    assert webhook(client, bad).status_code == 400
+    fixed = {**bad, "amount": 250}
+    assert webhook(client, fixed).json() == {"received": True}  # the retry is processed, not "duplicate"
+    again = {**fixed, "event_id": uuid.uuid4().hex}
+    assert webhook(client, again).json()["duplicate"] is True  # same rail_ref, new event id
+    assert run(db.upi_transactions.count_documents({"rail_ref": "r-nan", "type": "upi_receive"})) == 1
+
+
+def test_payments_run_one_at_a_time_per_user(client, monkeypatch):
+    uid, h = new_user(client)
+    monkeypatch.setattr(payments, "LOCK_WAIT_SECONDS", 0.3)
+    run(db.payment_locks.insert_one({"user_id": uid, "token": "other", "expires_at": datetime.utcnow() + timedelta(seconds=30)}))
+    busy = pay(client, uid, h, 130)
+    assert busy.status_code == 409 and "still being processed" in busy.json()["detail"]
+    # A lock left behind by a crashed worker is taken over once it expires.
+    run(db.payment_locks.update_one({"user_id": uid}, {"$set": {"expires_at": datetime.utcnow() - timedelta(seconds=1)}}))
+    assert pay(client, uid, h, 130).status_code == 200
+    assert run(db.payment_locks.find_one({"user_id": uid})) is None
+
+
+def test_unexpected_error_does_not_strand_the_idempotency_key(client, monkeypatch):
+    uid, h = new_user(client)
+
+    async def boom(txn):
+        raise RuntimeError("worker died mid-call")
+
+    monkeypatch.setattr(payments.rail, "pay", boom)
+    key = uuid.uuid4().hex
+    with pytest.raises(RuntimeError):
+        pay(client, uid, h, 140, key=key)
+    monkeypatch.undo()
+    retry = pay(client, uid, h, 140, key=key)
+    assert retry.status_code == 200 and retry.json()["status"] == "pending" and retry.json()["replayed"] is True

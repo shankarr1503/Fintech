@@ -4,10 +4,11 @@ import { Feather } from '@expo/vector-icons';
 import { errorMessage, getRewards, redeemReward } from '../../src/services/api';
 import { useGame } from '../../src/game/GameContext';
 import { Coin } from '../../src/game/Coin';
+import { VoxelCoin } from '../../src/ui/three/Voxel';
 import { useUserData } from '../../src/game/useData';
 import { Alert } from '../../src/ui/dialog';
 import { Body, Button, Divider, ErrorState, Heading, IconName, Label, Ring, Screen, Section, Sheet, SkeletonScreen, Small, Strong } from '../../src/ui/kit';
-import { C, F, GUTTER, R, tintFor, themed } from '../../src/ui/theme';
+import { C, F, GUTTER, ON_ACCENT, R, tintFor, themed } from '../../src/ui/theme';
 
 type Deal = { id: string; brand: string; title: string; coins_required: number; category: string; discount: string };
 
@@ -69,10 +70,13 @@ export default function RewardsTab() {
     <Screen title="Rewards" back={false} dark refreshing={refreshing} onRefresh={refresh}>
       {/* Balance */}
       <View style={styles.balance}>
-        <Coin size={34} />
-        <Text style={styles.coins} testID="coin-balance">
-          {coins.toLocaleString('en-IN')}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.coins} testID="coin-balance">
+            {coins.toLocaleString('en-IN')}
+          </Text>
+        </View>
+        {/* The one object you can pick up: drag to spin it. */}
+        <VoxelCoin size={112} spin={0.5} interactive accessibilityLabel={`${coins} coins`} />
       </View>
       <Small color={C.nightMuted}>coins · worth ₹{(coins * coinValue).toLocaleString('en-IN', { maximumFractionDigits: 2 })} in vouchers · {data.rewards.tier} member</Small>
 
@@ -193,7 +197,7 @@ export default function RewardsTab() {
           {profile.achievements.map((a) => (
             <View key={a.id} style={styles.badge} accessible accessibilityLabel={`${a.name}. ${a.desc}. ${a.unlocked ? 'Earned' : 'Locked'}`}>
               <View style={[styles.badgeIcon, a.unlocked && { backgroundColor: C.gold }]}>
-                <Feather name={a.unlocked ? BADGE_ICON[a.icon] ?? 'award' : 'lock'} size={20} color={a.unlocked ? '#000000' : C.nightMuted} />
+                <Feather name={a.unlocked ? BADGE_ICON[a.icon] ?? 'award' : 'lock'} size={20} color={a.unlocked ? ON_ACCENT : C.nightMuted} />
               </View>
               <Small color={a.unlocked ? C.nightText : C.nightMuted} center style={{ marginTop: 8, fontFamily: F.medium }} numberOfLines={1}>
                 {a.name}
@@ -229,8 +233,8 @@ export default function RewardsTab() {
 
 const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
-  balance: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
-  coins: { fontFamily: F.display, fontSize: 56, color: C.nightText, marginLeft: 12, letterSpacing: -1, fontVariant: ['tabular-nums'] },
+  balance: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  coins: { fontFamily: F.displayBold, fontSize: 56, color: C.nightText, letterSpacing: -1, fontVariant: ['tabular-nums'] },
   panel: { backgroundColor: C.night2, borderRadius: R.md, padding: 16 },
   levelNum: { fontFamily: F.display, fontSize: 34, color: C.nightText },
   week: { flexDirection: 'row', gap: 6, marginTop: 10 },

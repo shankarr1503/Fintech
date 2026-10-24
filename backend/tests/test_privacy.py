@@ -21,7 +21,9 @@ def run(coro):
 def login(client, phone):
     code = client.post("/api/auth/send-otp", json={"phone": phone}).json()["demo_otp"]
     res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10", "confirm_age": True}).json()
-    return res["user"]["id"], {"Authorization": f"Bearer {res['token']}"}
+    headers = {"Authorization": f"Bearer {res['token']}"}
+    assert client.post("/api/auth/pin", json={"pin": "4826"}, headers=headers).status_code == 200
+    return res["user"]["id"], headers
 
 
 def test_new_users_must_accept_terms_and_consent_is_recorded(client):
@@ -58,7 +60,10 @@ def test_erasure_deletes_personal_data_and_retains_what_law_requires(client):
     client.post("/api/auth/pin", json={"pin": "4826"}, headers=h)
     client.post("/api/kyc/submit", json={"user_id": uid, "pan": "ABCPE3333F", "full_name": "Er Ase", "dob": "1990-01-01", "consent": True}, headers=h)
     client.post("/api/upi/send-money", json={"user_id": uid, "recipient_upi": "rahul@paytm", "amount": 50}, headers=h)
-    res = client.request("DELETE", f"/api/users/{uid}", json={"user_id": uid, "reason": "test"}, headers=h).json()
+    no_pin = client.request("DELETE", f"/api/users/{uid}", json={"user_id": uid, "reason": "test"}, headers=h)
+    assert no_pin.status_code == 428  # erasure needs a fresh PIN confirmation
+    step = client.post("/api/auth/pin/verify", json={"pin": "4826"}, headers=h).json()["step_up_token"]
+    res = client.request("DELETE", f"/api/users/{uid}", json={"user_id": uid, "reason": "test"}, headers={**h, "X-Step-Up-Token": step}).json()
     assert res["deleted"]["transactions"] > 0 and "upi_transactions" in res["retained"]
     assert run(db.users.find_one({"id": uid})) is None
     assert run(db.transactions.count_documents({"user_id": uid})) == 0
@@ -112,7 +117,11 @@ def test_public_deletion_request_needs_the_otp_and_confirmation(client):
     code = client.post("/api/auth/send-otp", json={"phone": "9300000021"}).json()["demo_otp"]
     assert client.post("/api/privacy/deletion-request", json={"phone": "9300000021", "otp": code}).status_code == 400  # not confirmed
     assert client.post("/api/privacy/deletion-request", json={"phone": "9300000021", "otp": "000000", "confirm": True}).status_code == 400
-    res = client.post("/api/privacy/deletion-request", json={"phone": "9300000021", "otp": code, "confirm": True})
+    no_pin = client.post("/api/privacy/deletion-request", json={"phone": "9300000021", "otp": code, "confirm": True})
+    assert no_pin.status_code == 428  # an OTP alone (SIM swap) can't erase an account with a PIN
+    wrong = client.post("/api/privacy/deletion-request", json={"phone": "9300000021", "otp": code, "pin": "9999", "confirm": True})
+    assert wrong.status_code == 403
+    res = client.post("/api/privacy/deletion-request", json={"phone": "9300000021", "otp": code, "pin": "4826", "confirm": True})
     assert res.status_code == 200 and res.json()["deleted"] is True
     assert run(db.users.find_one({"id": uid})) is None
     assert client.get(f"/api/dashboard/{uid}", headers=h).status_code == 401  # signed out everywhere

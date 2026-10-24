@@ -3,10 +3,10 @@ import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { errorMessage, getUPILinkedAccounts, paymentByKey, requestMoneyUPI, sendMoneyUPI, verifyPin } from '../../src/services/api';
+import { errorMessage, getUPIHistory, getUPILinkedAccounts, isStepUpExpired, paymentByKey, requestMoneyUPI, sendMoneyUPI, verifyPin } from '../../src/services/api';
 import { useOnline } from '../../src/ui/OfflineBanner';
 import { PinPad } from '../../src/ui/PinPad';
-import { setReceipt } from '../../src/services/receipt';
+import { MAX_PAYMENT, MIN_PAYMENT, setReceipt } from '../../src/services/receipt';
 import { useUserData } from '../../src/game/useData';
 import { useGame } from '../../src/game/GameContext';
 import { Alert } from '../../src/ui/dialog';
@@ -14,21 +14,36 @@ import { Avatar, Button, haptic, IconButton, NATIVE, NO_OUTLINE, Row, Sheet, Sma
 import { SwipeToPay } from '../../src/ui/SwipeToPay';
 import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
 
-const MAX = 100000;
 // Must match STEP_UP_AMOUNT on the server: at or above this, the PIN is asked for.
 const STEP_UP_AMOUNT = 2000;
 
 const newKey = () => `pay-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
 
+/** Ask the server about a payment by key a few times. Null while that's still unknown: unreachable, or a 404
+ * that may come before the delayed original request, so a miss here doesn't prove nothing was sent. */
+async function lookupPayment(key: string) {
+  for (const wait of [0, 1500, 3000, 5000]) {
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+    try {
+      return await paymentByKey(key);
+    } catch {
+      // not received yet, or still offline: ask again
+    }
+  }
+  return null;
+}
+
 type Account = { id: string; bank: string; account_number: string; is_primary: boolean; balance: number };
 
 export default function AmountScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ to: string; name?: string; am?: string; tn?: string; mode?: string }>();
+  const params = useLocalSearchParams<{ to: string; name?: string; am?: string; tn?: string; mode?: string; src?: string }>();
   const request = params.mode === 'request';
-  const fixedAmount = !!params.am; // merchant QR with a set amount
-  const [amount, setAmount] = useState(params.am ?? '');
+  // Merchant QR with a set amount. Only lock it if it can actually be paid; otherwise they type one.
+  const am = params.am && /^\d+(\.\d{1,2})?$/.test(params.am) && Number(params.am) >= MIN_PAYMENT && Number(params.am) <= MAX_PAYMENT ? params.am : '';
+  const fixedAmount = !!am;
+  const [amount, setAmount] = useState(am);
   const [note, setNote] = useState(params.tn ?? '');
   const [editingNote, setEditingNote] = useState(false);
   const [source, setSource] = useState<string | null>(null);
@@ -42,16 +57,25 @@ export default function AmountScreen() {
   const { refresh } = useGame();
   useStatusBar('dark');
   const { data, userId } = useUserData((id) => getUPILinkedAccounts(id));
+  // Anyone can put any name in a QR code or link, so the new-payee warning depends only on the UPI ID.
+  const { data: history } = useUserData((id) => getUPIHistory(id));
+  const payee = params.to?.toLowerCase();
+  const paidBefore = Array.isArray(history) && history.some((t: any) => t.status === 'success' && (t.recipient ?? t.to)?.toLowerCase() === payee);
 
   const accounts: Account[] = data?.linked_accounts ?? [];
   const account = accounts.find((a) => a.id === source) ?? accounts.find((a) => a.is_primary) ?? accounts[0];
   const value = Number(amount || 0);
   const name = params.name || params.to?.split('@')[0] || '';
-  const valid = value >= 1 && value <= MAX;
+  const valid = value >= MIN_PAYMENT && value <= MAX_PAYMENT;
 
   useEffect(() => {
     if (!params.to) router.replace('/pay');
   }, [params.to, router]);
+
+  const badAmount = !!params.am && !am;
+  useEffect(() => {
+    if (badAmount) Alert.alert("Can't use this amount", `The amount in this code can't be paid. Enter an amount from ₹${MIN_PAYMENT} to ₹${MAX_PAYMENT.toLocaleString('en-IN')}.`);
+  }, [badAmount]);
 
   const nudge = () => {
     haptic('medium');
@@ -69,7 +93,7 @@ export default function AmountScreen() {
       const [whole, frac] = (a + k).split('.');
       if (frac !== undefined && frac.length > 2) return a;
       const next = (whole.replace(/^0+(?=\d)/, '') || '0') + (frac !== undefined ? `.${frac}` : '');
-      if (Number(next) > MAX) {
+      if (Number(next) > MAX_PAYMENT) {
         nudge();
         return a;
       }
@@ -81,7 +105,7 @@ export default function AmountScreen() {
   const idemKey = useRef(newKey());
   useEffect(() => {
     idemKey.current = newKey();
-  }, [value, note, params.to, source]);
+  }, [value, note, params.to, account?.id]);
 
   const finish = useCallback(
     (res: any) => {
@@ -89,6 +113,7 @@ export default function AmountScreen() {
         status: res.status,
         reason: res.reason,
         txnId: res.transaction_id,
+        key: idemKey.current,
         amount: res.amount,
         name: params.name || params.to,
         upi: params.to,
@@ -106,24 +131,39 @@ export default function AmountScreen() {
   );
 
   const pay = useCallback(
-    async (opts: { stepUpToken?: string; confirmDuplicate?: boolean } = {}) => {
+    async (opts: { stepUpToken?: string; confirmDuplicate?: boolean; rekeyed?: boolean } = {}) => {
       setBusy(true);
       try {
-        finish(await sendMoneyUPI(userId, params.to, value, note, account?.id ?? '', { idempotencyKey: idemKey.current, ...opts }));
+        const { rekeyed, ...send } = opts;
+        finish(await sendMoneyUPI(userId, params.to, value, note, account?.id ?? '', { idempotencyKey: idemKey.current, ...send }));
       } catch (e: any) {
         const status = e?.response?.status;
         const detail = errorMessage(e);
         if (!e?.response) {
           // Timed out or connection dropped: ask the server whether it got the payment before saying anything.
-          try {
-            const known = await paymentByKey(idemKey.current);
-            if (known.status === 'processing') finish({ status: 'pending', amount: value, transaction_id: '', reason: 'Waiting for the bank to confirm' });
-            else finish(known);
-          } catch {
-            Alert.alert("Payment didn't go through", "We couldn't reach CoinQuest, so nothing was sent and no money left your account. Check your connection and try again.");
-          }
+          const known = await lookupPayment(idemKey.current);
+          // Still unknown (unreachable, or not seen yet while the original request may be on its way):
+          // the receipt keeps checking by idempotency key and tells them not to pay again.
+          if (!known) finish({ status: 'unknown', amount: value, transaction_id: '' });
+          // Received but not finished yet: the receipt looks the transaction up by idempotency key.
+          else if (known.status === 'processing') finish({ status: 'pending', amount: value, transaction_id: '', reason: 'Waiting for the bank to confirm' });
+          else finish(known);
         } else if (status === 428) {
+          // First large payment, or the earlier confirmation was spent or expired: ask for the PIN.
+          if (opts.stepUpToken) setPinError('Your PIN confirmation expired. Confirm your PIN again.');
           setAskPin(true);
+        } else if (isStepUpExpired(e)) {
+          // Only the 5-minute PIN confirmation lapsed; nothing was sent.
+          setPinError('Your PIN confirmation expired. Confirm your PIN again.');
+          setAskPin(true);
+        } else if (status === 409 && detail.includes('still being processed')) {
+          // An earlier try with this key reached the server and is still running: wait for it, don't pay again.
+          finish({ status: 'pending', amount: value, transaction_id: '', reason: 'Waiting for the bank to confirm' });
+        } else if (status === 409 && detail.includes('already used for a different payment')) {
+          // The key belongs to an attempt with other details, and nothing was sent for this one: retry once with a new key.
+          idemKey.current = newKey();
+          if (!opts.rekeyed) await pay({ ...opts, rekeyed: true });
+          else Alert.alert('Payment not sent', 'Something went wrong on our side. No money has left your account. Please try again.');
         } else if (status === 409 && detail.includes('a moment ago')) {
           Alert.alert('Pay again?', detail, [
             { text: 'Cancel', style: 'cancel' },
@@ -201,7 +241,8 @@ export default function AmountScreen() {
         <View style={[styles.row, { marginTop: 3 }]}>
           <Small>{params.to}</Small>
         </View>
-        {!params.name && <Small style={{ marginTop: 4 }}>New payee: check the UPI ID carefully before you pay</Small>}
+        {params.src === 'qr' && params.name ? <Small style={{ marginTop: 4 }}>Name from the QR code, not verified</Small> : null}
+        {!paidBefore && <Small style={{ marginTop: 4 }}>New payee: check the UPI ID carefully before you pay</Small>}
       </View>
 
       <Animated.View style={[styles.amountWrap, { transform: [{ translateX: shake }] }]} accessible accessibilityLabel={`Amount ${value || 0} rupees`} testID="amount-display">
@@ -312,7 +353,7 @@ export default function AmountScreen() {
 }
 
 const styles = themed(() => StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.paper },
+  root: { flex: 1, backgroundColor: 'transparent' },
   row: { flexDirection: 'row', alignItems: 'center' },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: GUTTER, paddingTop: 6 },
   payee: { alignItems: 'center', marginTop: 10, paddingHorizontal: GUTTER },

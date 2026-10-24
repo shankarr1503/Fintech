@@ -1,7 +1,8 @@
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
+from ..auth import current_user
 from ..db import db
 from ..services import audit
 from ..utils import serialize_doc
@@ -9,6 +10,12 @@ from ..utils import serialize_doc
 router = APIRouter()
 public_router = APIRouter()
 logger = logging.getLogger(__name__)
+
+EDITABLE_PRIVACY = {
+    "data_sharing": {"analytics", "personalization", "marketing", "third_party"},
+    "communication": {"email_notifications", "sms_alerts", "push_notifications", "whatsapp_updates"},
+    "security": {"biometric_login"},
+}
 
 
 @router.get("/security/audit-log/{user_id}")
@@ -57,9 +64,22 @@ async def get_privacy_settings(user_id: str):
 @router.post("/security/update-privacy")
 async def update_privacy_settings(data: dict, request: Request):
     """Update privacy settings"""
-    user_id = data.get("user_id")
-    settings = data.get("settings", {})
-    
+    user_id = current_user(request)
+    raw = data.get("settings")
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=422, detail="settings must be an object")
+    # Only on/off switches in the user-editable sections; never user_id, retention or anything else.
+    settings = {}
+    for section, value in raw.items():
+        if section not in EDITABLE_PRIVACY or not isinstance(value, dict):
+            raise HTTPException(status_code=422, detail=f"'{section}' can't be changed here")
+        for key, flag in value.items():
+            if key not in EDITABLE_PRIVACY[section] or not isinstance(flag, bool):
+                raise HTTPException(status_code=422, detail=f"'{section}.{key}' must be a known on/off setting")
+            settings[f"{section}.{key}"] = flag
+    if not settings:
+        raise HTTPException(status_code=422, detail="Nothing to update")
+
     await db.privacy_settings.update_one(
         {"user_id": user_id},
         {"$set": settings},

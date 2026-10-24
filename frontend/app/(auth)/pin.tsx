@@ -97,7 +97,7 @@ export default function PinScreen() {
 
 const styles = themed(() =>
   StyleSheet.create({
-    root: { flex: 1, backgroundColor: C.paper },
+    root: { flex: 1, backgroundColor: 'transparent' },
     footer: { paddingHorizontal: GUTTER, paddingBottom: 18, gap: 8, alignItems: 'center' },
     pan: { height: 50, borderRadius: R.sm, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 14, fontFamily: F.semibold, fontSize: 16, color: C.ink, letterSpacing: 2, ...NO_OUTLINE },
   }),

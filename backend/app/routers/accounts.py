@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from ..config import settings
 from ..db import db
@@ -218,7 +218,9 @@ async def add_account(data: dict):
 
 @router.get("/investments/portfolio/{user_id}")
 async def get_investment_portfolio(user_id: str):
-    """Get complete investment portfolio"""
+    """Get complete investment portfolio (sample data; real holdings need an AA or depository link)"""
+    if not settings.demo_mode:
+        raise HTTPException(status_code=503, detail="Investment tracking opens once our Account Aggregator partner is connected.")
     return {
         "total_value": 970000,
         "total_invested": 850000,

@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { Button } from './kit';
-import { C, F, themed } from './theme';
+import { Button, Glass } from './kit';
+import { C, F, R, themed } from './theme';
 
 const KEY = 'cookie_choice';
 type Choice = 'all' | 'essential';
@@ -55,6 +55,7 @@ export function CookieNotice() {
   return (
     <View style={styles.wrap} pointerEvents="box-none">
       <View style={styles.card} accessibilityRole={'region' as any} accessibilityLabel="Cookie notice" testID="cookie-notice">
+        <Glass strong />
         <Text style={styles.title}>Cookies and storage</Text>
         <Text style={styles.body}>
           We only store what the app needs to work: keeping you signed in and remembering your settings. No ads, no tracking.{' '}
@@ -78,10 +79,11 @@ const styles = themed(() =>
     card: {
       width: '100%',
       maxWidth: 520,
-      backgroundColor: C.surface,
-      borderRadius: 18,
+      backgroundColor: C.glass,
+      borderRadius: R.md,
       padding: 16,
-      borderWidth: StyleSheet.hairlineWidth,
+      overflow: 'hidden',
+      borderWidth: 1,
       borderColor: C.lineStrong,
       shadowColor: '#000',
       shadowOpacity: 0.15,

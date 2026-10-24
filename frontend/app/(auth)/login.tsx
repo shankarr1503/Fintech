@@ -8,6 +8,7 @@ import { Coin } from '../../src/game/Coin';
 import { Alert } from '../../src/ui/dialog';
 import { Button, NO_OUTLINE, Small, useStatusBar } from '../../src/ui/kit';
 import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
+import { VoxelCoin } from '../../src/ui/three/Voxel';
 
 export default function Login() {
   useStatusBar('light');
@@ -41,6 +42,10 @@ export default function Login() {
           </Pressable>
 
           <View style={styles.hero}>
+            {/* Off-centre on purpose: the coin sits by the headline like an object on a desk. */}
+            <View style={{ alignSelf: 'flex-end', marginBottom: -18, marginRight: 4 }}>
+              <VoxelCoin size={104} spin={0.35} interactive />
+            </View>
             <Text style={styles.h1}>Pay, save</Text>
             <Text style={styles.h1}>
               and <Text style={styles.h1Italic}>level up.</Text>

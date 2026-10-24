@@ -1,9 +1,12 @@
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Annotated, Optional
 
 from pydantic import BaseModel, Field
+
+# A rupee amount the user typed: positive, finite (no NaN/inf) and below ₹1 crore.
+Money = Annotated[float, Field(gt=0, le=10_000_000, allow_inf_nan=False)]
 
 
 class TransactionType(str, Enum):
@@ -76,7 +79,7 @@ class Transaction(BaseModel):
 class TransactionCreate(BaseModel):
     user_id: str
     date: datetime
-    amount: float
+    amount: Money
     type: TransactionType
     merchant: str
     category: Optional[TransactionCategory] = None
@@ -98,10 +101,10 @@ class DebtCreate(BaseModel):
     user_id: str
     name: str = Field(min_length=1)
     type: DebtType
-    principal: float = Field(gt=0)
-    outstanding: float = Field(ge=0)
-    interest_rate: float = Field(ge=0, le=100)
-    emi_amount: float = Field(gt=0)
+    principal: Money
+    outstanding: Money  # a debt that's already paid off is not a boss to defeat
+    interest_rate: float = Field(ge=0, le=100, allow_inf_nan=False)
+    emi_amount: Money
     remaining_tenure: int = Field(gt=0)
 
 class SavingsGoal(BaseModel):
@@ -117,13 +120,13 @@ class SavingsGoal(BaseModel):
 class SavingsGoalCreate(BaseModel):
     user_id: str
     name: str = Field(min_length=1)
-    target_amount: float = Field(gt=0)
-    monthly_contribution: float = 0
+    target_amount: float = Field(ge=100, le=10_000_000, allow_inf_nan=False)
+    monthly_contribution: float = Field(default=0, ge=0, le=10_000_000, allow_inf_nan=False)
     target_date: Optional[datetime] = None
 
 class SavingsContribution(BaseModel):
     goal_id: str
-    amount: float = Field(gt=0)
+    amount: Money
 
 class Insight(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -155,8 +158,14 @@ class SecuritySettings(BaseModel):
 
 
 class DebtPayment(BaseModel):
-    amount: float = Field(gt=0)
+    amount: Money
 
 
 class CheckIn(BaseModel):
     user_id: str
+
+
+class CardBillPayment(BaseModel):
+    user_id: Optional[str] = None
+    card_bank: str = Field(min_length=1, max_length=40)
+    amount: Money

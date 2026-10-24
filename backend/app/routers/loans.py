@@ -1,9 +1,11 @@
 import logging
+import math
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from ..auth import current_user
 from ..db import db
 from ..ratelimit import limit
 from ..config import settings
@@ -24,11 +26,21 @@ GST = 0.18
 COOLING_OFF_DAYS = 3  # RBI Digital Lending Guidelines: exit without penalty during the look-up period
 
 
+def _collateral(kind: str) -> int:
+    """Pledgeable holdings. Only the demo has sample ones; real values need a depository link."""
+    return LOAN_TYPES[kind]["collateral_value"] if settings.demo_mode else 0
+
+
 def _max_loan(kind: str, score: int) -> int:
     t = LOAN_TYPES[kind]
     if kind == "personal_loan":
         return 500000 if score >= 700 else 200000
-    return int(t["collateral_value"] * t["max_ltv"] / 100)
+    return int(_collateral(kind) * t["max_ltv"] / 100)
+
+
+async def _score(user_id) -> int:
+    credit_score = await db.credit_scores.find_one({"user_id": user_id})
+    return credit_score.get("score", 700) if credit_score else 700
 
 
 def key_facts(kind: str, amount: float, tenure: int) -> dict:
@@ -64,25 +76,29 @@ def key_facts(kind: str, amount: float, tenure: int) -> dict:
     }
 
 
-def _validate(kind: str, amount, tenure) -> tuple:
+async def _validate(user_id, kind: str, amount, tenure) -> tuple:
     if kind not in LOAN_TYPES:
         raise HTTPException(status_code=400, detail="Unknown loan type")
     try:
         amount, tenure = float(amount), int(tenure)
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="Invalid amount or tenure")
+    if not math.isfinite(amount):
+        raise HTTPException(status_code=400, detail="Invalid amount or tenure")
     if amount < 10000:
         raise HTTPException(status_code=400, detail="The minimum loan is ₹10,000")
+    most = _max_loan(kind, await _score(user_id))
+    if amount > most:
+        raise HTTPException(status_code=400, detail=f"The most you can borrow here is ₹{most:,}" if most else "Link your investments to borrow against them")
     if tenure not in LOAN_TYPES[kind]["tenures"]:
         raise HTTPException(status_code=400, detail="Choose one of the tenures shown")
-    return amount, tenure
+    return round(amount, 2), tenure
 
 
 @router.get("/loans/eligibility/{user_id}")
 async def check_loan_eligibility(user_id: str):
     """Indicative eligibility. Final terms come from the lender."""
-    credit_score = await db.credit_scores.find_one({"user_id": user_id})
-    score = credit_score.get("score", 700) if credit_score else 700
+    score = await _score(user_id)
     return {
         "credit_score": score,
         "lender": None,
@@ -94,7 +110,7 @@ async def check_loan_eligibility(user_id: str):
                 "interest_rate": t["rate"],
                 "processing_fee": t["fee_pct"],
                 "tenure_options": t["tenures"],
-                "collateral_value": t["collateral_value"],
+                "collateral_value": _collateral(k),
                 "max_loan": _max_loan(k, score),
             }
             for k, t in LOAN_TYPES.items()
@@ -104,18 +120,18 @@ async def check_loan_eligibility(user_id: str):
 
 
 @router.post("/loans/quote")
-async def loan_quote(data: dict):
+async def loan_quote(data: dict, request: Request):
     """Key Fact Statement for a loan, shown before the user applies."""
-    amount, tenure = _validate(data.get("loan_type"), data.get("amount"), data.get("tenure"))
+    amount, tenure = await _validate(current_user(request), data.get("loan_type"), data.get("amount"), data.get("tenure"))
     return key_facts(data["loan_type"], amount, tenure)
 
 
 @router.post("/loans/apply")
-async def apply_for_loan(data: dict):
+async def apply_for_loan(data: dict, request: Request):
     """Submit an application. It is only sent to a lender after the user has seen and accepted the key facts."""
-    user_id = data.get("user_id")
+    user_id = current_user(request)
     await limit(f"loan-apply:{user_id}", 5, 3600)
-    amount, tenure = _validate(data.get("loan_type"), data.get("amount"), data.get("tenure"))
+    amount, tenure = await _validate(user_id, data.get("loan_type"), data.get("amount"), data.get("tenure"))
     if data.get("accept_key_facts") is not True:
         raise HTTPException(status_code=400, detail="Please review and accept the key facts first")
     facts = key_facts(data["loan_type"], amount, tenure)

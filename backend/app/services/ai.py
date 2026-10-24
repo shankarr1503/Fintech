@@ -5,9 +5,10 @@ to deterministic rules so the app works fully offline.
 """
 import json
 import logging
+import math
 import re
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from ..config import settings
 from ..db import db
@@ -74,6 +75,31 @@ async def categorize_transaction_ai(merchant: str, description: str = "") -> Tra
     return categorize_by_keywords(merchant, description)
 
 
+INSIGHT_CATEGORIES = {"saving", "warning", "spending"}
+
+
+def clean_insight(raw) -> Optional[Dict]:
+    """Keep only the fields we expect from the model, with the types we expect.
+
+    Model output is untrusted: a missing title used to crash the endpoint, and extra keys such as
+    "user_id" were spread into the stored insight."""
+    if not isinstance(raw, dict):
+        return None
+    title, description = raw.get("title"), raw.get("description")
+    if not isinstance(title, str) or not isinstance(description, str) or not title.strip():
+        return None
+    impact = raw.get("impact_amount")
+    if isinstance(impact, bool) or not isinstance(impact, (int, float)) or not math.isfinite(impact) or impact < 0:
+        impact = None
+    category = raw.get("category")
+    return {
+        "title": title.strip()[:80],
+        "description": description.strip()[:300],
+        "category": category if category in INSIGHT_CATEGORIES else "spending",
+        "impact_amount": impact,
+    }
+
+
 async def generate_financial_insights(user_id: str, use_ai: bool = True) -> List[Dict]:
     """Generate up to 3 insights from the last 60 days of spending."""
     try:
@@ -134,8 +160,8 @@ Rules:
                 # Extract JSON from response
                 json_match = re.search(r'\[.*\]', content, re.DOTALL)
                 if json_match:
-                    ai_insights = json.loads(json_match.group())
-                    if ai_insights and len(ai_insights) > 0:
+                    ai_insights = [i for i in map(clean_insight, json.loads(json_match.group())) if i]
+                    if ai_insights:
                         logger.info("AI insights generated successfully")
                         return ai_insights[:3]
             except Exception as ai_error:

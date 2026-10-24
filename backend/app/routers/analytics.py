@@ -73,9 +73,9 @@ async def get_insights(user_id: str):
     # Store insights
     for insight in insights:
         insight_obj = {
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
             **insight,
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,  # after the spread, so an insight can never name another user
             "created_at": datetime.utcnow()
         }
         await db.insights.update_one(

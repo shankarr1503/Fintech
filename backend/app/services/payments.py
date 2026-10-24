@@ -17,14 +17,16 @@ aggregator's UPI API). It has magic payee IDs for testing, like card sandboxes:
     timeout@coinquest  -> the rail times out (we mark pending, then reconcile)
     outage@coinquest   -> the rail is down (counts towards the circuit breaker)
 """
+import asyncio
 import hashlib
 import json
 import logging
 import random
 import time
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, AsyncIterator, Dict, Optional
 
 from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError
@@ -102,6 +104,37 @@ breaker = CircuitBreaker()
 UNAVAILABLE = "UPI is temporarily unavailable at the bank. You haven't been charged. Please try again in a minute."
 
 
+# ---------------------------------------------------------------- per-user payment lock
+
+LOCK_TTL = timedelta(seconds=60)  # longer than any rail call; a crashed worker's lock expires
+LOCK_WAIT_SECONDS = 5.0
+
+
+@asynccontextmanager
+async def user_lock(user_id: str) -> AsyncIterator[None]:
+    """Run one payment at a time per user.
+
+    Limit, duplicate and AML checks read the user's earlier payments; without this, parallel
+    requests all see the same history and together pass limits none of them could alone."""
+    token = uuid.uuid4().hex
+    deadline = time.monotonic() + LOCK_WAIT_SECONDS
+    while True:
+        now = datetime.utcnow()
+        try:
+            await db.payment_locks.insert_one({"user_id": user_id, "token": token, "expires_at": now + LOCK_TTL})
+            break
+        except DuplicateKeyError:
+            # Take over a lock whose holder died (the TTL monitor only sweeps once a minute).
+            await db.payment_locks.delete_one({"user_id": user_id, "expires_at": {"$lt": now}})
+            if time.monotonic() > deadline:
+                raise HTTPException(status_code=409, detail="Another payment is still being processed. Please wait a moment.")
+            await asyncio.sleep(0.1)
+    try:
+        yield
+    finally:
+        await db.payment_locks.delete_one({"user_id": user_id, "token": token})
+
+
 # ---------------------------------------------------------------- idempotency
 
 def body_hash(body: Dict[str, Any]) -> str:
@@ -132,6 +165,26 @@ async def idempotency_begin(user_id: str, key: Optional[str], fingerprint: str) 
 async def idempotency_finish(user_id: str, key: Optional[str], response: Dict[str, Any]):
     if key:
         await db.idempotency.update_one({"user_id": user_id, "key": key}, {"$set": {"state": "done", "response": response}})
+
+
+async def idempotency_attach(user_id: str, key: Optional[str], txn_id: str):
+    """Link the key to the payment it created, so an unexpected error can't orphan it."""
+    if key:
+        await db.idempotency.update_one({"user_id": user_id, "key": key}, {"$set": {"txn_id": txn_id}})
+
+
+async def idempotency_crashed(user_id: str, key: Optional[str]):
+    """After an unexpected error: answer retries with the payment if one was created, else free the key."""
+    if not key:
+        return
+    prior = await db.idempotency.find_one({"user_id": user_id, "key": key, "state": "processing"})
+    if not prior:
+        return
+    txn = await db.upi_transactions.find_one({"id": prior["txn_id"]}) if prior.get("txn_id") else None
+    if txn:
+        await idempotency_finish(user_id, key, {**public(txn), "reward": {}})
+    else:
+        await idempotency_abort(user_id, key)
 
 
 async def idempotency_abort(user_id: str, key: Optional[str]):

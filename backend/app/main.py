@@ -51,6 +51,12 @@ async def lifespan(_app: FastAPI):
     await db.idempotency.create_index([("user_id", 1), ("key", 1)], unique=True)
     await db.idempotency.create_index("expires_at", expireAfterSeconds=0)
     await db.webhook_events.create_index("event_id", unique=True)
+    await db.game_claims.create_index("key", unique=True)
+    await db.payment_locks.create_index("user_id", unique=True)
+    await db.used_step_ups.create_index("jti", unique=True)
+    await db.used_step_ups.create_index("expires_at", expireAfterSeconds=0)
+    await db.payment_locks.create_index("expires_at", expireAfterSeconds=0)
+    await db.game_claims.create_index("expires_at", expireAfterSeconds=0)
     await db.upi_transactions.create_index([("user_id", 1), ("timestamp", -1)])
     await db.upi_transactions.create_index("rail_ref")
     await db.audit_logs.create_index([("user_id", 1), ("seq", -1)])
@@ -102,7 +108,9 @@ app.include_router(api)
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     """HTTPS-only in production, plus defensive headers on every response."""
-    if settings.require_https and request.url.path.startswith("/api/"):
+    # /api/health carries no data and is what the container HEALTHCHECK calls over plain HTTP
+    # inside the private network; refusing it marked every production container unhealthy.
+    if settings.require_https and request.url.path.startswith("/api/") and request.url.path != "/api/health":
         proto = request.headers.get("x-forwarded-proto", request.url.scheme)
         if proto != "https":
             return JSONResponse({"detail": "HTTPS is required"}, status_code=403)

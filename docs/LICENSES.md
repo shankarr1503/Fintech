@@ -6,11 +6,10 @@ CoinQuest's own code, the app icon, the coin and other illustrations were made f
 
 | Asset | Licence | Notice |
 |---|---|---|
-| Alegreya Sans SC | SIL Open Font License 1.1 | Copyright 2013 The Alegreya Sans Project Authors |
-| Playfair Display SC | SIL Open Font License 1.1 | Copyright 2017 The Playfair Display Project Authors, with Reserved Font Name "Playfair Display" (used unmodified) |
+| Pixelify Sans | SIL Open Font License 1.1 | Copyright 2021 The Pixelify Sans Project Authors (https://github.com/eifetx/Pixelify-Sans). No Reserved Font Name. Modified: `frontend/scripts/build-fonts.py` adds the ₹ sign and four arrows; the modified files are distributed under the same licence |
 | Feather icons (via @expo/vector-icons) | MIT | Copyright (c) 2013-2017 Cole Bemis |
 
-The fonts are bundled with the app through `@expo-google-fonts`; they are not loaded from Google's servers at runtime.
+The font files are bundled with the app (`frontend/assets/fonts`); they are not loaded from Google's servers at runtime. The upstream files come from `@expo-google-fonts/pixelify-sans`, a build-time dev dependency.
 
 ## App (frontend/package.json)
 
@@ -18,17 +17,16 @@ Regenerate this list with `node frontend/scripts/licenses.js`.
 
 | Package | Version | Licence |
 |---|---|---|
-| @expo-google-fonts/alegreya-sans-sc | 0.4.2 | MIT AND OFL-1.1 |
-| @expo-google-fonts/playfair-display-sc | 0.4.1 | MIT AND OFL-1.1 |
 | @expo/vector-icons | 15.0.3 | MIT |
 | @react-native-async-storage/async-storage | 2.2.0 | MIT |
 | @react-native-community/netinfo | 11.4.1 | MIT |
-| @react-navigation/bottom-tabs | 7.4.2 | MIT |
-| @react-navigation/elements | 2.5.2 | MIT |
-| @react-navigation/native | 7.1.26 | MIT |
-| @react-navigation/native-stack | 7.3.21 | MIT |
+| @react-navigation/bottom-tabs | 7.20.0 | MIT |
+| @react-navigation/elements | 2.9.44 | MIT |
+| @react-navigation/native | 7.5.0 | MIT |
+| @react-navigation/native-stack | 7.20.0 | MIT |
 | axios | 1.13.2 | MIT |
 | expo | 54.0.37 | MIT |
+| expo-blur | 15.0.8 | MIT |
 | expo-camera | 17.0.10 | MIT |
 | expo-constants | 18.0.14 | MIT |
 | expo-device | 8.0.10 | MIT |
@@ -39,6 +37,7 @@ Regenerate this list with `node frontend/scripts/licenses.js`.
 | expo-local-authentication | 17.0.9 | MIT |
 | expo-notifications | 0.32.17 | MIT |
 | expo-router | 6.0.24 | MIT |
+| expo-secure-store | 15.0.8 | MIT |
 | expo-splash-screen | 31.0.13 | MIT |
 | expo-status-bar | 3.0.9 | MIT |
 | expo-system-ui | 6.0.9 | MIT |
